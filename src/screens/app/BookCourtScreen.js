@@ -131,7 +131,9 @@ export default function BookCourtScreen({ route, navigation }) {
       const bookingData = {
         userId: user.uid,
         courtId: courtId,
-        courtName: court.courtName,
+        courtNumber: court.courtNumber,
+        facilityName: "One Touch Futsal",
+        location: "Temerloh, Pahang",
         date: selectedDate,
         timeSlot: selectedTimeSlot,
         duration: duration,
@@ -180,10 +182,10 @@ export default function BookCourtScreen({ route, navigation }) {
         <Card style={styles.courtInfoCard}>
           <Card.Content>
             <Text variant="titleLarge" style={styles.courtName}>
-              {court.courtName}
+              {court.courtNumber}
             </Text>
             <Text variant="bodyMedium" style={styles.location}>
-              📍 {court.location}
+              📍 One Touch Futsal, Temerloh Pahang
             </Text>
             <Text variant="titleMedium" style={styles.price}>
               RM {court.pricePerHour.toFixed(2)}/hour
@@ -308,7 +310,7 @@ export default function BookCourtScreen({ route, navigation }) {
               </Text>
               <View style={styles.summaryRow}>
                 <Text>Court:</Text>
-                <Text style={styles.summaryValue}>{court.courtName}</Text>
+                <Text style={styles.summaryValue}>{court.courtNumber}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text>Date:</Text>
@@ -363,7 +365,7 @@ export default function BookCourtScreen({ route, navigation }) {
             Confirm Booking
           </Text>
           <Text variant="bodyMedium" style={styles.modalText}>
-            Are you sure you want to book {court.courtName} on {selectedDate} 
+            Are you sure you want to book {court.courtNumber} on {selectedDate} 
             from {selectedTimeSlot} to {getEndTime(selectedTimeSlot, duration)}?
           </Text>
           <Text variant="titleMedium" style={styles.modalTotal}>
