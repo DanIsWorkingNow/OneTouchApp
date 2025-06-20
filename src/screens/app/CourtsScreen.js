@@ -66,6 +66,8 @@ export default function CourtsScreen({ navigation }) {
 
   const handleBookCourt = (court) => {
   console.log('Navigating to BookCourt with:', { courtId: court.id, court: court });
+  console.log('🔍 Navigation Debug - Court data:', court);
+  console.log('🔍 Navigation Debug - Court ID:', court.id);
   
   // Check if court data exists
   if (!court || !court.id) {
