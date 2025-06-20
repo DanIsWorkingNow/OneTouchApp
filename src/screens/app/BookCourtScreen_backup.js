@@ -1,6 +1,6 @@
-// src/screens/app/BookCourtScreen.js - COMPLETE FIX
+// src/screens/app/BookCourtScreen.js - FIXED VERSION
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Dimensions, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, Dimensions } from 'react-native';
 import { 
   Text, Card, Button, Chip, RadioButton, Switch, 
   ActivityIndicator, Portal, Modal, Divider
@@ -10,13 +10,11 @@ import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase
 import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
 
-// Get screen dimensions for responsive design
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+// Get screen dimensions
+const { height: screenHeight } = Dimensions.get('window');
 
 export default function BookCourtScreen({ route, navigation }) {
   console.log('🎾 BookCourtScreen - Route params:', route.params);
-  console.log('Screen height:', Dimensions.get('window').height);
-  console.log('Screen width:', Dimensions.get('window').width);
   
   // Error handling for missing params
   if (!route.params || !route.params.court) {
@@ -81,59 +79,66 @@ export default function BookCourtScreen({ route, navigation }) {
         setAvailableSlots(courtData.timeSlots || defaultTimeSlots);
         console.log('✅ Court details loaded:', courtData);
       } else {
-        console.log('⚠️ No court found, using default data');
+        console.log('⚠️ Court not found in database, using route params');
         setAvailableSlots(defaultTimeSlots);
       }
     } catch (error) {
       console.error('❌ Error loading court details:', error);
+      // Fallback to route params and default slots
       setAvailableSlots(defaultTimeSlots);
-      Alert.alert('⚠️ Loading Error', 'Using default court settings');
     }
   };
 
   const loadBookedSlots = async (date) => {
     try {
       setLoading(true);
-      console.log('📡 Loading booked slots for:', date);
+      console.log('📅 Loading booked slots for date:', date);
       
       const bookingsRef = collection(db, 'bookings');
       const q = query(
         bookingsRef,
         where('courtId', '==', courtId),
         where('date', '==', date),
-        where('status', 'in', ['confirmed', 'pending'])
+        where('status', 'in', ['pending', 'confirmed'])
       );
+
+      const snapshot = await getDocs(q);
+      const booked = [];
+      snapshot.forEach((doc) => {
+        const booking = doc.data();
+        booked.push(booking.timeSlot);
+      });
       
-      const querySnapshot = await getDocs(q);
-      const booked = querySnapshot.docs.map(doc => doc.data().timeSlot);
       setBookedSlots(booked);
-      console.log('✅ Booked slots loaded:', booked);
+      console.log('📋 Booked slots for', date, ':', booked);
     } catch (error) {
       console.error('❌ Error loading booked slots:', error);
-      setBookedSlots([]);
+      setBookedSlots([]); // Fallback to no bookings
     } finally {
       setLoading(false);
     }
   };
 
-  const isSlotAvailable = (slot) => {
-    return !bookedSlots.includes(slot);
+  const isSlotAvailable = (timeSlot) => {
+    return !bookedSlots.includes(timeSlot);
   };
 
   const calculateTotal = () => {
-    const selectedOption = durationOptions.find(option => option.value === duration);
-    return selectedOption ? selectedOption.price : 0;
+    const selectedDuration = durationOptions.find(d => d.value === duration);
+    return selectedDuration ? selectedDuration.price : 0;
   };
 
-  const canProceedToBooking = () => {
-    return selectedDate && selectedTimeSlot && duration;
-  };
-
-  const handleBookCourt = () => {
-    if (!canProceedToBooking()) {
-      Alert.alert('⚠️ Missing Information', 'Please select date, time slot, and duration');
+  const handleBooking = async () => {
+    if (!selectedDate || !selectedTimeSlot) {
+      Alert.alert('⚠️ Missing Information', 'Please select both date and time slot');
       return;
     }
+
+    if (!auth.currentUser) {
+      Alert.alert('⚠️ Authentication Required', 'Please login to book a court');
+      return;
+    }
+
     setShowConfirmModal(true);
   };
 
@@ -142,35 +147,32 @@ export default function BookCourtScreen({ route, navigation }) {
       setLoading(true);
       setShowConfirmModal(false);
 
-      const user = auth.currentUser;
-      if (!user) {
-        Alert.alert('❌ Authentication Error', 'Please log in again');
-        return;
-      }
-
       const bookingData = {
-        userId: user.uid,
-        userEmail: user.email,
+        userId: auth.currentUser.uid,
+        userEmail: auth.currentUser.email,
         courtId: courtId,
-        courtName: courtDetails.courtNumber || courtDetails.name || 'Court',
+        courtNumber: courtDetails.courtNumber,
+        facilityName: courtDetails.facilityName || 'One Touch Futsal',
+        location: courtDetails.location || 'Temerloh, Pahang',
         date: selectedDate,
         timeSlot: selectedTimeSlot,
         duration: duration,
         needOpponent: needOpponent,
+        pricePerHour: courtDetails.pricePerHour || 80,
         totalAmount: calculateTotal(),
         status: 'confirmed',
-        paymentStatus: 'completed',
+        paymentStatus: 'completed', // For demo purposes
         createdAt: new Date(),
-        facilityName: courtDetails.facilityName || 'Sports Complex'
       };
 
-      console.log('📝 Creating booking with data:', bookingData);
-      
+      console.log('💾 Creating booking:', bookingData);
+
       const docRef = await addDoc(collection(db, 'bookings'), bookingData);
+      
       console.log('✅ Booking created with ID:', docRef.id);
 
       Alert.alert(
-        '🎉 Booking Confirmed!',
+        '🎉 Booking Successful!',
         `Your booking for ${courtDetails.courtNumber} on ${selectedDate} at ${selectedTimeSlot} has been confirmed.\n\nTotal: RM ${calculateTotal()}`,
         [
           {
@@ -212,26 +214,26 @@ export default function BookCourtScreen({ route, navigation }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.mainContainer}>
       <ScrollView 
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
         bounces={true}
-        nestedScrollEnabled={true}
+        alwaysBounceVertical={false}
       >
         {/* Court Information Card */}
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="headlineSmall" style={styles.courtTitle}>
-              {courtDetails.courtNumber || courtDetails.name || 'Court'}
+              🏟️ {courtDetails.courtNumber}
             </Text>
             <Text variant="bodyMedium" style={styles.courtInfo}>
-              📍 {courtDetails.facilityName || 'Sports Complex'}
+              📍 {courtDetails.location || 'Temerloh, Pahang'}
             </Text>
             <Text variant="bodyMedium" style={styles.courtInfo}>
-              🏟️ {courtDetails.location || 'Main Facility'}
+              🏢 {courtDetails.facilityName || 'One Touch Futsal'}
             </Text>
             <Text variant="titleMedium" style={styles.priceText}>
               💰 RM {courtDetails.pricePerHour || 80}/hour
@@ -247,23 +249,22 @@ export default function BookCourtScreen({ route, navigation }) {
             </Text>
             <Calendar
               onDayPress={(day) => {
-                console.log('Selected date:', day.dateString);
+                console.log('📅 Date selected:', day.dateString);
                 setSelectedDate(day.dateString);
                 setSelectedTimeSlot(''); // Reset time slot when date changes
               }}
-              markedDates={{
-                [selectedDate]: {
-                  selected: true,
-                  selectedColor: Colors.primary,
-                  selectedTextColor: 'white'
-                }
-              }}
               minDate={getTodayDate()}
               maxDate={getMaxDate()}
+              markedDates={{
+                [selectedDate]: { selected: true, selectedColor: Colors.primary }
+              }}
               theme={{
                 selectedDayBackgroundColor: Colors.primary,
                 todayTextColor: Colors.primary,
                 arrowColor: Colors.primary,
+                monthTextColor: Colors.primary,
+                indicatorColor: Colors.primary,
+                textDayFontWeight: '500',
                 textMonthFontWeight: 'bold',
                 textDayHeaderFontWeight: '600',
               }}
@@ -379,7 +380,7 @@ export default function BookCourtScreen({ route, navigation }) {
               
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Date:</Text>
-                <Text style={styles.summaryValue}>{formatDate(selectedDate)}</Text>
+                <Text style={styles.summaryValue}>{selectedDate}</Text>
               </View>
               
               <View style={styles.summaryRow}>
@@ -389,43 +390,43 @@ export default function BookCourtScreen({ route, navigation }) {
               
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Duration:</Text>
-                <Text style={styles.summaryValue}>{duration} hour{duration > 1 ? 's' : ''}</Text>
+                <Text style={styles.summaryValue}>{duration} hour(s)</Text>
               </View>
               
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Opponent:</Text>
                 <Text style={styles.summaryValue}>{needOpponent ? 'Needed' : 'Not needed'}</Text>
               </View>
+
+              <Divider style={{ marginVertical: 12, backgroundColor: 'rgba(255,255,255,0.3)' }} />
               
-              <Divider style={styles.totalRow} />
-              
-              <View style={styles.summaryRow}>
-                <Text style={styles.totalLabel}>Total:</Text>
+              <View style={[styles.summaryRow, styles.totalRow]}>
+                <Text style={styles.totalLabel}>Total Amount:</Text>
                 <Text style={styles.totalValue}>RM {calculateTotal()}</Text>
               </View>
             </Card.Content>
           </Card>
         )}
 
-        {/* Large bottom padding for scroll comfort */}
-        <View style={styles.bottomPadding} />
-      </ScrollView>
-
-      {/* Fixed Booking Button */}
-      {canProceedToBooking() && (
+        {/* Booking Button */}
         <View style={styles.bookingButtonContainer}>
           <Button
             mode="contained"
-            onPress={handleBookCourt}
+            onPress={handleBooking}
+            disabled={!selectedDate || !selectedTimeSlot || loading}
+            loading={loading}
             style={styles.bookingButton}
             contentStyle={styles.bookingButtonContent}
             buttonColor={Colors.primary}
-            disabled={loading}
           >
-            📅 Book Court - RM {calculateTotal()}
+            {loading ? 'Processing...' : `Book Court - RM ${calculateTotal()}`}
           </Button>
         </View>
-      )}
+
+        {/* Extra bottom padding for better scrolling */}
+        <View style={styles.bottomPadding} />
+
+      </ScrollView>
 
       {/* Confirmation Modal */}
       <Portal>
@@ -437,12 +438,8 @@ export default function BookCourtScreen({ route, navigation }) {
           <Text variant="titleLarge" style={styles.modalTitle}>
             🎾 Confirm Booking
           </Text>
-          <Text variant="bodyLarge" style={styles.modalText}>
-            Court: {courtDetails.courtNumber}{'\n'}
-            Date: {formatDate(selectedDate)}{'\n'}
-            Time: {selectedTimeSlot}{'\n'}
-            Duration: {duration} hour{duration > 1 ? 's' : ''}{'\n'}
-            Opponent: {needOpponent ? 'Needed' : 'Not needed'}
+          <Text style={styles.modalText}>
+            Are you sure you want to book {courtDetails.courtNumber} on {selectedDate} at {selectedTimeSlot} for {duration} hour(s)?
           </Text>
           <Text variant="titleMedium" style={styles.modalTotal}>
             Total: RM {calculateTotal()}
@@ -473,21 +470,22 @@ export default function BookCourtScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  // ✅ FIXED: Container with proper React Native layout
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
+  mainContainer: {
+  flex: 1,
+  backgroundColor: '#f5f5f5',
+  height: '100vh', // Force full viewport height on web
+  minHeight: 600, // Minimum height fallback
+},
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 20,
+    paddingBottom: 0, // Remove conflicting padding
   },
   bottomPadding: {
-    height: 140, // Extra space for comfortable scrolling
-    backgroundColor: 'transparent',
+    height: 120, // Large bottom padding for comfortable scrolling
+    backgroundColor: '#f5f5f5',
   },
   errorContainer: {
     flex: 1,
@@ -629,7 +627,6 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.3)',
     paddingTop: 8,
     marginTop: 8,
-    marginBottom: 8,
   },
   totalLabel: {
     fontSize: 18,
@@ -642,18 +639,12 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   bookingButtonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     paddingHorizontal: 16,
     paddingVertical: 16,
     backgroundColor: '#f5f5f5',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
   },
   bookingButton: {
-    paddingVertical: 4,
+    paddingVertical: 8,
     borderRadius: 12,
   },
   bookingButtonContent: {

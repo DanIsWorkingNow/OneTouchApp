@@ -1,8 +1,9 @@
-// src/navigation/AppStack.js - FIXED VERSION
+// src/navigation/AppStack.js - FIXED FOR SCROLLVIEW COMPATIBILITY
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
+
 import { Colors } from '../constants/Colors';
 
 // Import screens
@@ -15,42 +16,28 @@ import ProfileScreen from '../screens/app/ProfileScreen';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Tab Navigator for main app screens
+// Main Tabs Navigator
 function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
-
-          if (route.name === 'Home') {
-            iconName = 'home';
-          } else if (route.name === 'Courts') {
-            iconName = 'sports-soccer';
-          } else if (route.name === 'MyBookings') {
-            iconName = 'event';
-          } else if (route.name === 'Profile') {
-            iconName = 'person';
-          }
-
+          if (route.name === 'Home') iconName = 'home';
+          else if (route.name === 'Courts') iconName = 'sports-soccer';
+          else if (route.name === 'MyBookings') iconName = 'event';
+          else if (route.name === 'Profile') iconName = 'person';
           return <MaterialIcons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: 'gray',
-        tabBarStyle: {
-          backgroundColor: Colors.surface,
-          elevation: 8,
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-        },
-        headerStyle: {
+        headerStyle: { 
           backgroundColor: Colors.primary,
+          elevation: 0, // Remove shadow for better ScrollView performance
+          shadowOpacity: 0, // Remove iOS shadow
         },
         headerTintColor: 'white',
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerTitleStyle: { fontWeight: 'bold' },
       })}
     >
       <Tab.Screen 
@@ -89,27 +76,31 @@ function MainTabs() {
   );
 }
 
-// Main Stack Navigator - FIXED FOR PROPER SCROLLVIEW LAYOUT
+// Main Stack Navigator - OPTIMIZED FOR SCROLLVIEW
 export default function AppStack() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
           backgroundColor: Colors.primary,
-          elevation: 0, // Remove shadow that can interfere with layout
-          shadowOpacity: 0, // Remove iOS shadow
+          elevation: 0, // Remove shadow that can interfere with ScrollView
+          shadowOpacity: 0, // Remove iOS shadow that can affect layout
         },
         headerTintColor: 'white',
         headerTitleStyle: {
           fontWeight: 'bold',
         },
+        // CRITICAL: Ensure consistent background and no layout conflicts
         cardStyle: { 
-          backgroundColor: '#f5f5f5' // Ensure consistent background
+          backgroundColor: '#f5f5f5'
         },
-        // CRITICAL FIX: Optimize for ScrollView performance
+        // Optimize for smooth ScrollView performance
         gestureEnabled: true,
         cardOverlayEnabled: false,
         animationEnabled: true,
+        // Prevent header from interfering with ScrollView
+        headerTransparent: false,
+        headerMode: 'screen',
       }}
     >
       {/* Main tabs */}
@@ -121,35 +112,27 @@ export default function AppStack() {
         }}
       />
       
-      {/* Booking flow screens - FIXED FOR SCROLLVIEW */}
+      {/* BookCourt screen with SIMPLIFIED navigation options */}
       <Stack.Screen 
         name="BookCourt" 
         component={BookCourtScreen}
         options={({ route }) => ({
           title: `Book ${route.params?.court?.courtNumber || 'Court'}`,
           headerBackTitle: 'Courts',
-          // CRITICAL FIXES for ScrollView layout:
-          headerTitleContainerStyle: {
-            left: 0, // Prevent header from affecting content layout
-          },
+          // SIMPLIFIED header configuration to prevent layout conflicts
           headerStyle: {
             backgroundColor: Colors.primary,
-            elevation: 2, // Minimal elevation
-            shadowOpacity: 0.1,
-            height: 56, // Fixed header height
+            elevation: 0, // No shadow
+            shadowOpacity: 0, // No iOS shadow
           },
-          // Ensure proper content area calculation
-          cardStyle: { 
+          headerTintColor: 'white',
+          headerTitleStyle: {
+            fontWeight: 'bold',
+          },
+          // Remove any custom card styling that might interfere
+          cardStyle: {
             backgroundColor: '#f5f5f5',
-            // CRITICAL: Remove any potential flex conflicts
-            flex: 1,
           },
-          // Optimize screen transitions for better ScrollView performance
-          cardStyleInterpolator: ({ current }) => ({
-            cardStyle: {
-              opacity: current.progress,
-            },
-          }),
         })}
       />
       
@@ -165,14 +148,3 @@ export default function AppStack() {
     </Stack.Navigator>
   );
 }
-
-<Stack.Screen 
-  name="BookCourt" 
-  component={BookCourtScreen}
-  options={({ route }) => ({
-    title: `Book ${route.params?.court?.courtNumber || 'Court'}`,
-    headerBackTitle: 'Courts',
-    // ALTERNATIVE FIX: Remove header completely for this screen
-    headerShown: false, // Try this if scrolling still doesn't work
-  })}
-/>
