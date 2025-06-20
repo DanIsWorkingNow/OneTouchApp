@@ -64,6 +64,21 @@ export default function CourtsScreen({ navigation }) {
     loadCourts();
   };
 
+  const handleBookCourt = (court) => {
+  console.log('Navigating to BookCourt with:', { courtId: court.id, court: court });
+  
+  // Check if court data exists
+  if (!court || !court.id) {
+    Alert.alert('Error', 'Court data is missing');
+    return;
+  }
+  
+  navigation.navigate('BookCourt', { 
+    courtId: court.id,
+    court: court 
+  });
+};
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'available': return '#4CAF50';
@@ -117,17 +132,30 @@ export default function CourtsScreen({ navigation }) {
         >
           Details
         </Button>
-        <Button 
-          mode="contained" 
-          onPress={() => navigation.navigate('BookCourt', { 
-            courtId: court.id,
-            court: court 
-          })}
-          style={styles.bookButton}
-          disabled={court.status !== 'available'}
-        >
-          {court.status === 'available' ? 'Book Now' : 'Unavailable'}
-        </Button>
+        // Replace the Book Now button with:
+<Button 
+  mode="contained" 
+  onPress={() => handleBookCourt(court)}
+  style={styles.bookButton}
+  disabled={court.status !== 'available'}
+>
+  {court.status === 'available' ? 'Book Now' : 'Unavailable'}
+</Button>
+
+// Add this test button temporarily
+<Button 
+  mode="outlined"
+  onPress={() => navigation.navigate('BookCourt', { 
+    courtId: 'test-id',
+    court: { 
+      courtNumber: 'Test Court',
+      pricePerHour: 50.00,
+      id: 'test-id'
+    }
+  })}
+>
+  TEST NAVIGATION
+</Button>
       </Card.Actions>
     </Card>
   );

@@ -11,6 +11,17 @@ import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
 
 export default function BookCourtScreen({ route, navigation }) {
+    console.log('BookCourtScreen - Route params:', route.params);
+  
+  // Add error handling for missing params
+  if (!route.params || !route.params.court) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Error: Missing court data</Text>
+        <Button onPress={() => navigation.goBack()}>Go Back</Button>
+      </View>
+    );
+  }
   const { court, courtId } = route.params;
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('');
