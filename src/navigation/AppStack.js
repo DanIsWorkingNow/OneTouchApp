@@ -1,4 +1,4 @@
-// src/navigation/AppStack.js
+// src/navigation/AppStack.js - FIXED VERSION
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -89,38 +89,71 @@ function MainTabs() {
   );
 }
 
-// Main Stack Navigator
+// Main Stack Navigator - FIXED FOR PROPER SCROLLVIEW LAYOUT
 export default function AppStack() {
   return (
     <Stack.Navigator
       screenOptions={{
         headerStyle: {
           backgroundColor: Colors.primary,
+          elevation: 0, // Remove shadow that can interfere with layout
+          shadowOpacity: 0, // Remove iOS shadow
         },
         headerTintColor: 'white',
         headerTitleStyle: {
           fontWeight: 'bold',
         },
+        cardStyle: { 
+          backgroundColor: '#f5f5f5' // Ensure consistent background
+        },
+        // CRITICAL FIX: Optimize for ScrollView performance
+        gestureEnabled: true,
+        cardOverlayEnabled: false,
+        animationEnabled: true,
       }}
     >
       {/* Main tabs */}
       <Stack.Screen 
         name="MainTabs" 
         component={MainTabs}
-        options={{ headerShown: false }}
+        options={{ 
+          headerShown: false 
+        }}
       />
       
-      {/* Booking flow screens */}
+      {/* Booking flow screens - FIXED FOR SCROLLVIEW */}
       <Stack.Screen 
         name="BookCourt" 
         component={BookCourtScreen}
         options={({ route }) => ({
           title: `Book ${route.params?.court?.courtNumber || 'Court'}`,
           headerBackTitle: 'Courts',
+          // CRITICAL FIXES for ScrollView layout:
+          headerTitleContainerStyle: {
+            left: 0, // Prevent header from affecting content layout
+          },
+          headerStyle: {
+            backgroundColor: Colors.primary,
+            elevation: 2, // Minimal elevation
+            shadowOpacity: 0.1,
+            height: 56, // Fixed header height
+          },
+          // Ensure proper content area calculation
+          cardStyle: { 
+            backgroundColor: '#f5f5f5',
+            // CRITICAL: Remove any potential flex conflicts
+            flex: 1,
+          },
+          // Optimize screen transitions for better ScrollView performance
+          cardStyleInterpolator: ({ current }) => ({
+            cardStyle: {
+              opacity: current.progress,
+            },
+          }),
         })}
       />
       
-      {/* Future screens (for Phase 3 & 4) */}
+      {/* Other screens */}
       <Stack.Screen 
         name="CourtDetails" 
         component={CourtsScreen} // Placeholder for now
@@ -129,15 +162,17 @@ export default function AppStack() {
           headerBackTitle: 'Courts',
         })}
       />
-      
-      <Stack.Screen 
-        name="FindOpponent" 
-        component={MyBookingsScreen} // Placeholder for now
-        options={{
-          title: 'Find Opponent',
-          headerBackTitle: 'Bookings',
-        }}
-      />
     </Stack.Navigator>
   );
 }
+
+<Stack.Screen 
+  name="BookCourt" 
+  component={BookCourtScreen}
+  options={({ route }) => ({
+    title: `Book ${route.params?.court?.courtNumber || 'Court'}`,
+    headerBackTitle: 'Courts',
+    // ALTERNATIVE FIX: Remove header completely for this screen
+    headerShown: false, // Try this if scrolling still doesn't work
+  })}
+/>
