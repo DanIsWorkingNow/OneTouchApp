@@ -16,7 +16,7 @@ import {
   checkCollectionsStatus, 
   setupCurrentUserBookings,
   clearAllCollections 
-} from '../utils/hardcodedDatabaseSetup';
+} from '../../utils/hardcodedDatabaseSetup';
 
 export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
