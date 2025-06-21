@@ -144,20 +144,7 @@ export default function CourtsScreen({ navigation }) {
   {court.status === 'available' ? 'Book Now' : 'Unavailable'}
 </Button>
 
-// Add this test button temporarily
-<Button 
-  mode="outlined"
-  onPress={() => navigation.navigate('BookCourt', { 
-    courtId: 'test-id',
-    court: { 
-      courtNumber: 'Test Court',
-      pricePerHour: 50.00,
-      id: 'test-id'
-    }
-  })}
->
-  TEST NAVIGATION
-</Button>
+
       </Card.Actions>
     </Card>
   );
