@@ -186,6 +186,7 @@ export default function HomeScreen({ navigation }) {
                 mode="contained"
                 onPress={() => navigation.navigate('Courts')}
                 style={styles.primaryButton}
+                buttonColor={Colors.primary}
                 icon="calendar-plus"
                 contentStyle={styles.buttonContent}
               >

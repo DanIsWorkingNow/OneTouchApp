@@ -329,6 +329,7 @@ export default function BookCourtScreen({ route, navigation }) {
               loading={loading}
               disabled={loading}
               style={styles.bookingButton}
+                buttonColor={Colors.primary}
               contentStyle={styles.bookingButtonContent}
             >
               {loading ? 'Processing...' : 'Confirm Booking'}
@@ -369,6 +370,7 @@ export default function BookCourtScreen({ route, navigation }) {
               onPress={handleBooking}
               loading={loading}
               style={styles.modalButton}
+               buttonColor={Colors.primary}
             >
               Confirm
             </Button>

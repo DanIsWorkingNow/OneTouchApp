@@ -254,6 +254,7 @@ export default function MyBookingsScreen({ navigation }) {
             mode="contained" 
             onPress={() => {/* Find opponent functionality */}}
             style={styles.actionButton}
+            buttonColor={Colors.primary}
             compact
           >
             Find Match

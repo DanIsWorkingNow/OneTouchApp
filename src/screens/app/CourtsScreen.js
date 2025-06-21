@@ -139,6 +139,7 @@ export default function CourtsScreen({ navigation }) {
   mode="contained" 
   onPress={() => handleBookCourt(court)}
   style={styles.bookButton}
+  buttonColor={Colors.primary} 
   disabled={court.status !== 'available'}
 >
   {court.status === 'available' ? 'Book Now' : 'Unavailable'}
