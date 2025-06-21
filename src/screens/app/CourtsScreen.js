@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   statusChip: {
-    height: 28,
+    height: 30,
   },
   statusText: {
     color: 'white',

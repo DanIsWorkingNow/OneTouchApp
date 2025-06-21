@@ -1,11 +1,11 @@
-// src/screens/app/MyBookingsScreen.js
+// src/screens/app/MyBookingsScreen.js - ANDROID FIX
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, RefreshControl } from 'react-native';
 import { 
-  Text, Card, Button, Chip, ActivityIndicator, 
-  SegmentedButtons, FAB, Portal, Modal 
+  Text, Card, Button, Chip, SegmentedButtons, 
+  ActivityIndicator, Portal, Modal, FAB
 } from 'react-native-paper';
-import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, orderBy } from 'firebase/firestore';
 import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
 
@@ -13,162 +13,134 @@ export default function MyBookingsScreen({ navigation }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all');
-  const [filteredBookings, setFilteredBookings] = useState([]);
+  const [filterStatus, setFilterStatus] = useState('all');
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-
-  const filterOptions = [
-    { value: 'all', label: 'All' },
-    { value: 'upcoming', label: 'Upcoming' },
-    { value: 'completed', label: 'Completed' },
-    { value: 'cancelled', label: 'Cancelled' }
-  ];
 
   useEffect(() => {
     loadBookings();
   }, []);
 
-  useEffect(() => {
-    filterBookings();
-  }, [bookings, filter]);
-
-  const loadBookings = () => {
-    const user = auth.currentUser;
-    if (!user) return;
-
+  const loadBookings = async () => {
     try {
-      const bookingsRef = collection(db, 'bookings');
-      const q = query(bookingsRef, where('userId', '==', user.uid));
+      setLoading(true);
+      const q = query(
+        collection(db, 'bookings'),
+        where('userId', '==', auth.currentUser.uid),
+        orderBy('createdAt', 'desc')
+      );
       
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const bookingsData = [];
-        snapshot.forEach((doc) => {
-          bookingsData.push({
-            id: doc.id,
-            ...doc.data()
-          });
-        });
-        
-        // Sort by date and time (newest first)
-        bookingsData.sort((a, b) => {
-          const dateA = new Date(`${a.date} ${a.timeSlot}`);
-          const dateB = new Date(`${b.date} ${b.timeSlot}`);
-          return dateB - dateA;
-        });
-        
-        setBookings(bookingsData);
-        setLoading(false);
-        setRefreshing(false);
-      });
-
-      return unsubscribe;
+      const snapshot = await getDocs(q);
+      const bookingsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        // ✅ FIX: Handle both totalPrice and totalAmount fields
+        totalAmount: doc.data().totalPrice || doc.data().totalAmount || 0,
+        totalPrice: doc.data().totalPrice || doc.data().totalAmount || 0
+      }));
+      
+      setBookings(bookingsData);
     } catch (error) {
       console.error('Error loading bookings:', error);
+      Alert.alert('Error', 'Failed to load bookings');
+    } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
-  const filterBookings = () => {
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadBookings();
+    setRefreshing(false);
+  };
+
+  const getFilteredBookings = () => {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    const currentTime = now.getHours() + ':' + now.getMinutes().toString().padStart(2, '0');
+    const currentTime = now.getHours() * 100 + now.getMinutes();
 
-    let filtered = [...bookings];
-
-    switch (filter) {
-      case 'upcoming':
-        filtered = bookings.filter(booking => {
-          const bookingDate = booking.date;
-          const bookingTime = booking.timeSlot;
-          
-          if (bookingDate > today) return true;
-          if (bookingDate === today && bookingTime > currentTime) return true;
-          return false;
-        });
-        break;
-      case 'completed':
-        filtered = bookings.filter(booking => 
-          booking.status === 'completed' || 
-          (booking.date < today || (booking.date === today && booking.timeSlot < currentTime))
-        );
-        break;
-      case 'cancelled':
-        filtered = bookings.filter(booking => booking.status === 'cancelled');
-        break;
-      default:
-        break;
-    }
-
-    setFilteredBookings(filtered);
-  };
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadBookings();
+    return bookings.filter(booking => {
+      // Filter by status
+      if (filterStatus === 'upcoming') {
+        return booking.date > today || 
+               (booking.date === today && parseInt(booking.timeSlot.replace(':', '')) > currentTime);
+      } else if (filterStatus === 'past') {
+        return booking.date < today || 
+               (booking.date === today && parseInt(booking.timeSlot.replace(':', '')) < currentTime);
+      } else if (filterStatus === 'cancelled') {
+        return booking.status === 'cancelled';
+      }
+      return true; // 'all'
+    });
   };
 
   const getStatusColor = (status, date, timeSlot) => {
     if (status === 'cancelled') return '#F44336';
-    if (status === 'completed') return '#4CAF50';
     
-    // Check if booking is in the past
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    const currentTime = now.getHours() + ':' + now.getMinutes().toString().padStart(2, '0');
+    const currentTime = now.getHours() * 100 + now.getMinutes();
+    const bookingTime = parseInt(timeSlot.replace(':', ''));
     
-    if (date < today || (date === today && timeSlot < currentTime)) {
-      return '#4CAF50'; // Past bookings are considered completed
-    }
-    
-    switch (status) {
-      case 'confirmed': return '#2196F3';
-      case 'pending': return '#FF9800';
-      default: return '#9E9E9E';
+    if (date < today || (date === today && bookingTime < currentTime)) {
+      return '#4CAF50'; // Past - Green
+    } else {
+      return '#2196F3'; // Upcoming - Blue
     }
   };
 
   const getStatusText = (status, date, timeSlot) => {
-    // Check if booking is in the past
+    if (status === 'cancelled') return 'CANCELLED';
+    
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    const currentTime = now.getHours() + ':' + now.getMinutes().toString().padStart(2, '0');
+    const currentTime = now.getHours() * 100 + now.getMinutes();
+    const bookingTime = parseInt(timeSlot.replace(':', ''));
     
-    if (date < today || (date === today && timeSlot < currentTime)) {
+    if (date < today || (date === today && bookingTime < currentTime)) {
       return 'COMPLETED';
+    } else if (date === today) {
+      return 'TODAY';
+    } else {
+      return 'UPCOMING';
     }
-    
-    return status.toUpperCase();
   };
 
   const canCancelBooking = (booking) => {
-    const now = new Date();
-    const bookingDateTime = new Date(`${booking.date} ${booking.timeSlot}`);
-    const timeDiff = bookingDateTime - now;
-    const hoursDiff = timeDiff / (1000 * 60 * 60);
+    if (booking.status === 'cancelled') return false;
     
-    return hoursDiff > 2 && booking.status !== 'cancelled' && booking.status !== 'completed';
+    const now = new Date();
+    const bookingDate = new Date(booking.date);
+    const timeDiff = bookingDate.getTime() - now.getTime();
+    const hoursDiff = timeDiff / (1000 * 3600);
+    
+    return hoursDiff > 2; // Can cancel if more than 2 hours before
   };
 
-  const handleCancelBooking = (booking) => {
+  const handleCancelBooking = async (booking) => {
     Alert.alert(
       'Cancel Booking',
-      `Are you sure you want to cancel your booking for ${booking.courtName} on ${booking.date} at ${booking.timeSlot}?`,
+      `Are you sure you want to cancel your booking for ${booking.courtName} on ${formatDate(booking.date)}?`,
       [
         { text: 'No', style: 'cancel' },
-        { text: 'Yes', onPress: () => cancelBooking(booking.id) }
+        { 
+          text: 'Yes, Cancel', 
+          style: 'destructive',
+          onPress: () => confirmCancelBooking(booking)
+        }
       ]
     );
   };
 
-  const cancelBooking = async (bookingId) => {
+  const confirmCancelBooking = async (booking) => {
     try {
-      await updateDoc(doc(db, 'bookings', bookingId), {
+      await updateDoc(doc(db, 'bookings', booking.id), {
         status: 'cancelled',
         cancelledAt: new Date()
       });
+      
       Alert.alert('Success', 'Booking cancelled successfully');
+      loadBookings(); // Refresh the list
     } catch (error) {
       console.error('Error cancelling booking:', error);
       Alert.alert('Error', 'Failed to cancel booking. Please try again.');
@@ -190,13 +162,34 @@ export default function MyBookingsScreen({ navigation }) {
     });
   };
 
+  // ✅ FIX: Safe price formatting with null checks
+  const formatPrice = (booking) => {
+    const price = booking.totalPrice || booking.totalAmount || 0;
+    return typeof price === 'number' ? price.toFixed(2) : '0.00';
+  };
+
+  // ✅ FIX: Safe end time calculation
+  const calculateEndTime = (timeSlot, duration) => {
+    try {
+      if (!timeSlot || !duration) return 'N/A';
+      
+      const [hours, minutes] = timeSlot.split(':').map(num => parseInt(num));
+      const endHours = hours + (duration || 1);
+      const endMinutes = minutes;
+      
+      return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+    } catch (error) {
+      return 'N/A';
+    }
+  };
+
   const renderBookingCard = (booking) => (
     <Card key={booking.id} style={styles.bookingCard} mode="outlined">
       <Card.Content>
         <View style={styles.cardHeader}>
           <View style={styles.courtInfo}>
             <Text variant="titleMedium" style={styles.courtName}>
-              {booking.courtName}
+              {booking.courtName || 'Unknown Court'}
             </Text>
             <Text variant="bodySmall" style={styles.bookingId}>
               ID: {booking.id.slice(-8)}
@@ -218,14 +211,19 @@ export default function MyBookingsScreen({ navigation }) {
             📅 {formatDate(booking.date)}
           </Text>
           <Text variant="bodyMedium" style={styles.timeText}>
-            ⏰ {booking.timeSlot} - {booking.endTime} ({booking.duration}h)
+            ⏰ {booking.timeSlot} - {calculateEndTime(booking.timeSlot, booking.duration)} ({booking.duration || 1}h)
           </Text>
           <Text variant="bodyMedium" style={styles.priceText}>
-            💰 RM {booking.totalAmount.toFixed(2)}
+            💰 RM {formatPrice(booking)}
           </Text>
           {booking.needOpponent && (
             <Text variant="bodySmall" style={styles.opponentText}>
               🤝 Looking for opponent
+            </Text>
+          )}
+          {booking.facilityName && (
+            <Text variant="bodySmall" style={styles.facilityText}>
+              📍 {booking.facilityName}
             </Text>
           )}
         </View>
@@ -254,7 +252,7 @@ export default function MyBookingsScreen({ navigation }) {
         {booking.needOpponent && booking.status === 'confirmed' && (
           <Button 
             mode="contained" 
-            onPress={() => navigation.navigate('FindOpponent', { booking })}
+            onPress={() => {/* Find opponent functionality */}}
             style={styles.actionButton}
             compact
           >
@@ -274,14 +272,21 @@ export default function MyBookingsScreen({ navigation }) {
     );
   }
 
+  const filteredBookings = getFilteredBookings();
+
   return (
     <View style={styles.container}>
-      {/* Filter Buttons */}
+      {/* Filter Tabs */}
       <View style={styles.filterContainer}>
         <SegmentedButtons
-          value={filter}
-          onValueChange={setFilter}
-          buttons={filterOptions}
+          value={filterStatus}
+          onValueChange={setFilterStatus}
+          buttons={[
+            { value: 'all', label: 'All' },
+            { value: 'upcoming', label: 'Upcoming' },
+            { value: 'past', label: 'Past' },
+            { value: 'cancelled', label: 'Cancelled' },
+          ]}
           style={styles.segmentedButtons}
         />
       </View>
@@ -293,11 +298,11 @@ export default function MyBookingsScreen({ navigation }) {
         }
       >
         <View style={styles.header}>
-          <Text variant="headlineSmall" style={styles.title}>
+          <Text variant="titleLarge" style={styles.title}>
             My Bookings
           </Text>
           <Text variant="bodyMedium" style={styles.subtitle}>
-            {filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''}
+            {filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''} found
           </Text>
         </View>
 
@@ -306,12 +311,10 @@ export default function MyBookingsScreen({ navigation }) {
         ) : (
           <View style={styles.emptyContainer}>
             <Text variant="bodyLarge" style={styles.emptyText}>
-              No bookings found
+              {filterStatus === 'all' ? 'No bookings yet' : `No ${filterStatus} bookings`}
             </Text>
             <Text variant="bodySmall" style={styles.emptySubtext}>
-              {filter === 'all' 
-                ? "You haven't made any bookings yet" 
-                : `No ${filter} bookings found`}
+              {filterStatus === 'all' ? 'Book your first court to get started!' : `You don't have any ${filterStatus} bookings.`}
             </Text>
           </View>
         )}
@@ -327,8 +330,8 @@ export default function MyBookingsScreen({ navigation }) {
 
       {/* Booking Details Modal */}
       <Portal>
-        <Modal
-          visible={showDetailsModal}
+        <Modal 
+          visible={showDetailsModal} 
           onDismiss={() => setShowDetailsModal(false)}
           contentContainerStyle={styles.modalContent}
         >
@@ -337,41 +340,46 @@ export default function MyBookingsScreen({ navigation }) {
               <Text variant="titleLarge" style={styles.modalTitle}>
                 Booking Details
               </Text>
-              
+
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Court:</Text>
                 <Text style={styles.detailValue}>{selectedBooking.courtName}</Text>
               </View>
-              
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Facility:</Text>
+                <Text style={styles.detailValue}>{selectedBooking.facilityName || 'N/A'}</Text>
+              </View>
+
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Date:</Text>
                 <Text style={styles.detailValue}>{formatDate(selectedBooking.date)}</Text>
               </View>
-              
+
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Time:</Text>
                 <Text style={styles.detailValue}>
-                  {selectedBooking.timeSlot} - {selectedBooking.endTime}
+                  {selectedBooking.timeSlot} - {calculateEndTime(selectedBooking.timeSlot, selectedBooking.duration)}
                 </Text>
               </View>
-              
+
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Duration:</Text>
-                <Text style={styles.detailValue}>{selectedBooking.duration} hour(s)</Text>
+                <Text style={styles.detailValue}>{selectedBooking.duration || 1} hour{(selectedBooking.duration || 1) > 1 ? 's' : ''}</Text>
               </View>
-              
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Total Amount:</Text>
-                <Text style={styles.detailValue}>RM {selectedBooking.totalAmount.toFixed(2)}</Text>
-              </View>
-              
+
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Status:</Text>
                 <Text style={styles.detailValue}>
                   {getStatusText(selectedBooking.status, selectedBooking.date, selectedBooking.timeSlot)}
                 </Text>
               </View>
-              
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Total Price:</Text>
+                <Text style={styles.detailValue}>RM {formatPrice(selectedBooking)}</Text>
+              </View>
+
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Need Opponent:</Text>
                 <Text style={styles.detailValue}>{selectedBooking.needOpponent ? 'Yes' : 'No'}</Text>
@@ -457,13 +465,20 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   statusChip: {
-    height: 28,
-  },
-  statusText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
+  height: 34,              // ✅ INCREASED from 28 to 34 for more space
+  minWidth: 95,            // ✅ NEW: Ensures enough width for text
+  paddingHorizontal: 14,   // ✅ NEW: More horizontal padding
+  borderRadius: 17,        // ✅ NEW: Rounded edges for better look
+  alignItems: 'center',    // ✅ NEW: Center alignment
+  justifyContent: 'center', // ✅ NEW: Center content
+},
+statusText: {
+  color: 'white',
+  fontSize: 12,            // ✅ Kept readable size
+  fontWeight: '600',       // ✅ Better than 'bold' for readability
+  letterSpacing: 0.3,      // ✅ NEW: Improves text spacing
+  textAlign: 'center',     // ✅ NEW: Center text
+},
   bookingDetails: {
     marginBottom: 8,
   },
@@ -483,6 +498,11 @@ const styles = StyleSheet.create({
   opponentText: {
     color: Colors.secondary,
     fontStyle: 'italic',
+    marginBottom: 4,
+  },
+  facilityText: {
+    color: Colors.onSurface,
+    opacity: 0.7,
   },
   cardActions: {
     paddingHorizontal: 16,

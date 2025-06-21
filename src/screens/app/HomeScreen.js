@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   statusChip: {
-    height: 24,
+    height: 36,
   },
   statusText: {
     color: 'white',
