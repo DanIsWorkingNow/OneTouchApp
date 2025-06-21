@@ -11,21 +11,12 @@ import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
 import { setupDemoCourts, checkIfCourtsExist } from '../../utils/setupDemoData';
 
-import { 
-  setupCompleteDatabase, 
-  checkCollectionsStatus, 
-  setupCurrentUserBookings,
-  clearAllCollections 
-} from '../../utils/hardcodedDatabaseSetup';
-
 export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [recentBookings, setRecentBookings] = useState([]);
   const [totalCourts, setTotalCourts] = useState(0);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [setupLoading, setSetupLoading] = useState(false);
-  const [dbStatus, setDbStatus] = useState(null);
 
   const user = auth.currentUser;
 
@@ -140,97 +131,6 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
-  // Function to setup complete database
-const handleSetupCompleteDatabase = async () => {
-  setSetupLoading(true);
-  try {
-    console.log('🚀 Starting complete database setup...');
-    
-    const result = await setupCompleteDatabase(true); // true = clear existing data first
-    
-    if (result.success) {
-      Alert.alert(
-        '🎉 Setup Complete!', 
-        result.message,
-        [{ text: 'OK', onPress: checkDatabaseStatus }]
-      );
-    } else {
-      Alert.alert('❌ Setup Failed', result.message || result.error);
-    }
-  } catch (error) {
-    console.error('Setup error:', error);
-    Alert.alert('❌ Error', 'Database setup failed: ' + error.message);
-  } finally {
-    setSetupLoading(false);
-  }
-};
-
-// Function to check database status
-const checkDatabaseStatus = async () => {
-  try {
-    const result = await checkCollectionsStatus();
-    if (result.success) {
-      setDbStatus(result.status);
-      console.log('📊 Database Status:', result.status);
-    }
-  } catch (error) {
-    console.error('Status check error:', error);
-  }
-};
-
-// Function to add bookings for current user
-const handleAddCurrentUserBookings = async () => {
-  setSetupLoading(true);
-  try {
-    const result = await setupCurrentUserBookings();
-    if (result.success) {
-      Alert.alert('✅ Success', result.message);
-    } else {
-      Alert.alert('❌ Error', result.message);
-    }
-  } catch (error) {
-    Alert.alert('❌ Error', 'Failed to add user bookings: ' + error.message);
-  } finally {
-    setSetupLoading(false);
-  }
-};
-
-// Function to clear all data
-const handleClearDatabase = async () => {
-  Alert.alert(
-    '⚠️ Clear Database',
-    'This will delete ALL data in the database. Are you sure?',
-    [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear All',
-        style: 'destructive',
-        onPress: async () => {
-          setSetupLoading(true);
-          try {
-            const result = await clearAllCollections();
-            if (result.success) {
-              Alert.alert('✅ Cleared', result.message);
-              setDbStatus(null);
-            } else {
-              Alert.alert('❌ Error', result.error);
-            }
-          } catch (error) {
-            Alert.alert('❌ Error', error.message);
-          } finally {
-            setSetupLoading(false);
-          }
-        }
-      }
-    ]
-  );
-};
-
-// Check status when component loads
-useEffect(() => {
-  checkDatabaseStatus();
-}, []);
-
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -304,80 +204,6 @@ useEffect(() => {
             </View>
           </Card.Content>
         </Card>
-
-        // Add this JSX to your HomeScreen return statement:
-
-{/* Database Setup Card - Development Only */}
-<Card style={styles.setupCard}>
-  <Card.Content>
-    <Text variant="titleMedium" style={styles.setupTitle}>
-      🗄️ Database Setup (Development)
-    </Text>
-    
-    {/* Database Status */}
-    {dbStatus && (
-      <View style={styles.statusContainer}>
-        <Text style={styles.statusTitle}>📊 Current Status:</Text>
-        <Text style={styles.statusText}>
-          🏟️ Courts: {dbStatus.courts?.count || 0} documents
-        </Text>
-        <Text style={styles.statusText}>
-          👥 Users: {dbStatus.users?.count || 0} documents  
-        </Text>
-        <Text style={styles.statusText}>
-          📅 Bookings: {dbStatus.bookings?.count || 0} documents
-        </Text>
-      </View>
-    )}
-    
-    {/* Setup Buttons */}
-    <View style={styles.buttonRow}>
-      <Button 
-        mode="contained" 
-        onPress={handleSetupCompleteDatabase}
-        loading={setupLoading}
-        style={[styles.setupButton, styles.primaryButton]}
-        disabled={setupLoading}
-      >
-        🚀 Setup All Data
-      </Button>
-      
-      <Button 
-        mode="outlined" 
-        onPress={checkDatabaseStatus}
-        style={styles.setupButton}
-        disabled={setupLoading}
-      >
-        📊 Check Status
-      </Button>
-    </View>
-    
-    <View style={styles.buttonRow}>
-      <Button 
-        mode="outlined" 
-        onPress={handleAddCurrentUserBookings}
-        loading={setupLoading}
-        style={styles.setupButton}
-        disabled={setupLoading || !auth.currentUser}
-      >
-        📅 Add My Bookings
-      </Button>
-      
-      <Button 
-        mode="outlined" 
-        onPress={handleClearDatabase}
-        style={[styles.setupButton, styles.dangerButton]}
-        disabled={setupLoading}
-      >
-        🗑️ Clear All
-      </Button>
-    </View>
-    
-    <Text style={styles.warningText}>
-      ⚠️ Remove this section before production deployment
-    </Text>
-  </Card.Content>
-</Card>
 
         {/* Demo Setup (Show only if no courts exist) */}
         {totalCourts === 0 && (
@@ -694,55 +520,5 @@ const styles = StyleSheet.create({
   },
   snackbar: {
     backgroundColor: Colors.primary,
-  },
-   setupCard: {
-    margin: 16,
-    backgroundColor: '#fff3cd',
-    borderColor: '#ffeaa7',
-    borderWidth: 2,
-    borderRadius: 8,
-  },
-  setupTitle: {
-    color: '#d68910',
-    marginBottom: 12,
-    fontWeight: 'bold',
-  },
-  statusContainer: {
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 6,
-    marginBottom: 16,
-  },
-  statusTitle: {
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#495057',
-  },
-  statusText: {
-    fontSize: 14,
-    color: '#6c757d',
-    marginBottom: 4,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  setupButton: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  primaryButton: {
-    backgroundColor: '#28a745',
-  },
-  dangerButton: {
-    borderColor: '#dc3545',
-  },
-  warningText: {
-    fontSize: 12,
-    color: '#6c757d',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginTop: 12,
   },
 });
