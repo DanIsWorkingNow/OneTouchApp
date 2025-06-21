@@ -1,19 +1,36 @@
-// src/screens/app/ProfileScreen.js
+// ✅ COMPLETE: Updated ProfileScreen.js with Change Password Feature
+
+// src/screens/app/ProfileScreen.js - COMPLETE VERSION WITH CHANGE PASSWORD
 import React, { useState } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { 
   Text, Card, Button, List, Avatar, Divider,
   Portal, Modal, TextInput
 } from 'react-native-paper';
-import { signOut, updateProfile } from 'firebase/auth';
+import { 
+  signOut, 
+  updateProfile, 
+  updatePassword, 
+  reauthenticateWithCredential, 
+  EmailAuthProvider 
+} from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
 
 export default function ProfileScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const user = auth.currentUser;
 
@@ -40,6 +57,88 @@ export default function ProfileScreen() {
   const handleEditProfile = () => {
     setNewDisplayName(user?.displayName || '');
     setShowEditModal(true);
+  };
+
+  const handleChangePassword = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowPasswordModal(true);
+  };
+
+  const validatePasswords = () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      Alert.alert('Error', 'Please fill in all password fields');
+      return false;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'New password must be at least 6 characters long');
+      return false;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Error', 'New passwords do not match');
+      return false;
+    }
+
+    if (currentPassword === newPassword) {
+      Alert.alert('Error', 'New password must be different from current password');
+      return false;
+    }
+
+    return true;
+  };
+
+  const savePasswordChange = async () => {
+    if (!validatePasswords()) return;
+
+    setLoading(true);
+    try {
+      const user = auth.currentUser;
+      
+      // Create credential for reauthentication
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      
+      // Reauthenticate user
+      await reauthenticateWithCredential(user, credential);
+      
+      // Update password
+      await updatePassword(user, newPassword);
+      
+      setShowPasswordModal(false);
+      Alert.alert(
+        'Success', 
+        'Password updated successfully!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Clear sensitive data
+              setCurrentPassword('');
+              setNewPassword('');
+              setConfirmPassword('');
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Password change error:', error);
+      
+      let errorMessage = 'Failed to change password. Please try again.';
+      
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Current password is incorrect.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'New password is too weak.';
+      } else if (error.code === 'auth/requires-recent-login') {
+        errorMessage = 'Please log out and log back in before changing your password.';
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const saveProfile = async () => {
@@ -136,7 +235,7 @@ export default function ProfileScreen() {
             description="Update your account password"
             left={props => <List.Icon {...props} icon="lock-reset" />}
             right={props => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => Alert.alert('Coming Soon', 'This feature will be available in the next update')}
+            onPress={handleChangePassword}
           />
           
           <Divider />
@@ -193,20 +292,20 @@ export default function ProfileScreen() {
             description="App version and information"
             left={props => <List.Icon {...props} icon="information" />}
             right={props => <List.Icon {...props} icon="chevron-right" />}
-            onPress={() => Alert.alert('About One Touch', 'Version 1.0.0\n\nFutsal Court Management System\n\nDeveloped with ❤️ for futsal players')}
+            onPress={() => Alert.alert('About', 'OneTouch Futsal Court Booking App v1.0\n\nDeveloped for easy court booking and management.')}
           />
         </Card>
 
-        {/* Logout Section */}
+        {/* Logout */}
         <Card style={styles.logoutCard}>
           <Card.Content>
             <Button
-              mode="contained"
+              mode="outlined"
               onPress={handleLogout}
               style={styles.logoutButton}
-              buttonColor="#F44336"
-              textColor="white"
               icon="logout"
+              textColor="#F44336"
+              buttonColor="transparent"
             >
               Logout
             </Button>
@@ -216,15 +315,15 @@ export default function ProfileScreen() {
 
       {/* Edit Profile Modal */}
       <Portal>
-        <Modal
-          visible={showEditModal}
+        <Modal 
+          visible={showEditModal} 
           onDismiss={() => setShowEditModal(false)}
           contentContainerStyle={styles.modalContent}
         >
           <Text variant="titleLarge" style={styles.modalTitle}>
             Edit Profile
           </Text>
-          
+
           <TextInput
             label="Display Name"
             value={newDisplayName}
@@ -233,7 +332,7 @@ export default function ProfileScreen() {
             style={styles.input}
             left={<TextInput.Icon icon="account" />}
           />
-          
+
           <View style={styles.modalActions}>
             <Button
               mode="outlined"
@@ -246,11 +345,93 @@ export default function ProfileScreen() {
             <Button
               mode="contained"
               onPress={saveProfile}
-              style={styles.modalButton}
               loading={loading}
+              style={styles.modalButton}
               disabled={loading}
             >
               Save
+            </Button>
+          </View>
+        </Modal>
+      </Portal>
+
+      {/* Password Change Modal */}
+      <Portal>
+        <Modal 
+          visible={showPasswordModal} 
+          onDismiss={() => setShowPasswordModal(false)}
+          contentContainerStyle={styles.modalContent}
+        >
+          <Text variant="titleLarge" style={styles.modalTitle}>
+            Change Password
+          </Text>
+
+          <TextInput
+            label="Current Password"
+            value={currentPassword}
+            onChangeText={setCurrentPassword}
+            mode="outlined"
+            style={styles.input}
+            secureTextEntry={!showCurrentPassword}
+            right={
+              <TextInput.Icon 
+                icon={showCurrentPassword ? "eye-off" : "eye"} 
+                onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+              />
+            }
+            left={<TextInput.Icon icon="lock" />}
+          />
+
+          <TextInput
+            label="New Password"
+            value={newPassword}
+            onChangeText={setNewPassword}
+            mode="outlined"
+            style={styles.input}
+            secureTextEntry={!showNewPassword}
+            right={
+              <TextInput.Icon 
+                icon={showNewPassword ? "eye-off" : "eye"} 
+                onPress={() => setShowNewPassword(!showNewPassword)}
+              />
+            }
+            left={<TextInput.Icon icon="lock-plus" />}
+            placeholder="Minimum 6 characters"
+          />
+
+          <TextInput
+            label="Confirm New Password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            mode="outlined"
+            style={styles.input}
+            secureTextEntry={!showConfirmPassword}
+            right={
+              <TextInput.Icon 
+                icon={showConfirmPassword ? "eye-off" : "eye"} 
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              />
+            }
+            left={<TextInput.Icon icon="lock-check" />}
+          />
+
+          <View style={styles.modalActions}>
+            <Button
+              mode="outlined"
+              onPress={() => setShowPasswordModal(false)}
+              style={styles.modalButton}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={savePasswordChange}
+              loading={loading}
+              style={styles.modalButton}
+              disabled={loading}
+            >
+              Change Password
             </Button>
           </View>
         </Modal>
@@ -306,12 +487,14 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     paddingVertical: 8,
+    borderColor: '#F44336',
   },
   modalContent: {
     backgroundColor: 'white',
     padding: 20,
     margin: 20,
     borderRadius: 8,
+    maxHeight: '80%',
   },
   modalTitle: {
     textAlign: 'center',
