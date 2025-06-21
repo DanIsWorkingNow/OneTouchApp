@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginVertical: 8,
     elevation: 3,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#303030',
     borderRadius: 12,
   },
   summaryTitle: {
