@@ -10,6 +10,8 @@ import { collection, query, where, getDocs, limit, orderBy } from 'firebase/fire
 import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
 import { setupDemoCourts, checkIfCourtsExist } from '../../utils/setupDemoData';
+import DatabaseSetupComponent from '../../components/DatabaseSetupComponent';
+import RoleTestComponent from '../../components/RoleTestComponent';
 
 export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
@@ -148,6 +150,23 @@ export default function HomeScreen({ navigation }) {
             </Text>
           </Card.Content>
         </Card>
+
+         <ScrollView style={styles.container}>
+      <DatabaseSetupComponent />
+      
+      {/* TEMPORARY - Role testing */}
+      <RoleTestComponent />
+      
+      {/* Your existing HomeScreen content */}
+    </ScrollView>
+
+        <ScrollView style={styles.container}>
+      {/* TEMPORARY - Remove after setup */}
+      <DatabaseSetupComponent />
+      
+      {/* Your existing HomeScreen content below */}
+      {/* ... rest of your home screen ... */}
+    </ScrollView>
 
         {/* Quick Stats */}
         <View style={styles.statsContainer}>

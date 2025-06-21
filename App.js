@@ -1,4 +1,4 @@
-// App.js - COMPLETE MOBILE FIX (Keep Your Full Structure)
+// App.js - COMPLETE MOBILE FIX (Keep Your Full Structure) + AuthContext
 // ⚠️ CRITICAL: This import MUST be at the very top for mobile to work
 import 'react-native-gesture-handler';
 
@@ -15,6 +15,9 @@ import { Platform, Alert } from 'react-native';
 // Fixed imports for root App.js file
 import { Colors } from './src/constants/Colors';
 import { auth } from './src/constants/firebaseConfig';
+
+// ADD THIS LINE: Import AuthContext
+import { AuthProvider } from './src/contexts/AuthContext';
 
 // Import screens with correct paths
 import HomeScreen from './src/screens/app/HomeScreen';
@@ -162,16 +165,22 @@ export default function App() {
   if (loading) {
     return (
       <PaperProvider>
-        <LoadingScreen />
+        {/* WRAP WITH AuthProvider */}
+        <AuthProvider>
+          <LoadingScreen />
+        </AuthProvider>
       </PaperProvider>
     );
   }
 
   return (
     <PaperProvider>
-      <NavigationContainer>
-        {user ? <AppStack /> : <AuthStack />}
-      </NavigationContainer>
+      {/* WRAP WITH AuthProvider */}
+      <AuthProvider>
+        <NavigationContainer>
+          {user ? <AppStack /> : <AuthStack />}
+        </NavigationContainer>
+      </AuthProvider>
     </PaperProvider>
   );
 }
