@@ -1,4 +1,7 @@
-// App.js (Root file - Replace entire content with this)
+// App.js - COMPLETE MOBILE FIX (Keep Your Full Structure)
+// ⚠️ CRITICAL: This import MUST be at the very top for mobile to work
+import 'react-native-gesture-handler';
+
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { Provider as PaperProvider } from 'react-native-paper';
@@ -6,6 +9,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 import { onAuthStateChanged } from 'firebase/auth';
+import { Platform, Alert } from 'react-native';
 
 // Fixed imports for root App.js file
 import { Colors } from './src/constants/Colors';
@@ -94,18 +98,64 @@ function AppStack() {
   );
 }
 
-// Main App Component
+// Main App Component - Enhanced for Mobile Compatibility
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
+    console.log('🎾 One Touch App - Starting...');
+    console.log('📱 Platform:', Platform.OS);
+    
+    // Enhanced Firebase initialization check for mobile
+    if (!auth) {
+      console.error('❌ Firebase auth not initialized');
+      if (Platform.OS !== 'web') {
+        Alert.alert(
+          'Firebase Error', 
+          'Firebase authentication not initialized. Please check your configuration.',
+          [{ text: 'OK' }]
+        );
+      }
       setLoading(false);
-    });
+      return;
+    }
 
-    return unsubscribe;
+    console.log('🔥 Setting up Firebase auth listener...');
+    
+    try {
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        console.log('🔥 Auth state changed:', user ? `User: ${user.email}` : 'No user');
+        setUser(user);
+        setLoading(false);
+      }, (error) => {
+        console.error('🔥 Firebase auth error:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        
+        // Show user-friendly error on mobile
+        if (Platform.OS !== 'web') {
+          Alert.alert(
+            'Authentication Error',
+            `Firebase error: ${error.message}`,
+            [{ text: 'OK' }]
+          );
+        }
+        setLoading(false);
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      console.error('❌ Critical error setting up Firebase:', error);
+      if (Platform.OS !== 'web') {
+        Alert.alert(
+          'App Error',
+          'Failed to initialize authentication. Please restart the app.',
+          [{ text: 'OK' }]
+        );
+      }
+      setLoading(false);
+    }
   }, []);
 
   if (loading) {
