@@ -268,30 +268,7 @@ const getStatusMessage = (booking) => {
         </Chip>
         </View>
 
-        <View style={styles.bookingDetails}>
-          <Text variant="bodyMedium" style={styles.dateText}>
-            📅 {formatDate(booking.date)}
-          </Text>
-          <Text variant="bodyMedium" style={styles.timeText}>
-            ⏰ {booking.timeSlot} - {calculateEndTime(booking.timeSlot, booking.duration)} ({booking.duration || 1}h)
-          </Text>
-          <Text variant="bodyMedium" style={styles.priceText}>
-            💰 RM {formatPrice(booking)}
-          </Text>
-          {booking.needOpponent && (
-            <Text variant="bodySmall" style={styles.opponentText}>
-              🤝 Looking for opponent
-            </Text>
-          )}
-          {booking.facilityName && (
-            <Text variant="bodySmall" style={styles.facilityText}>
-              📍 {booking.facilityName}
-            </Text>
-          )}
-        </View>
-      </Card.Content>
-
-      // 🔧 ADD status message in the booking details section:
+         // 🔧 ADD status message in the booking details section:
 <View style={styles.bookingDetails}>
   <Text variant="bodyMedium" style={styles.dateText}>
     📅 {formatDate(booking.date)}
@@ -329,6 +306,9 @@ const getStatusMessage = (booking) => {
     </Text>
   )}
 </View>
+
+        
+      </Card.Content>
 
       <Card.Actions style={styles.cardActions}>
         <Button 
