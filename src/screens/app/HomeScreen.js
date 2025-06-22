@@ -20,6 +20,7 @@ import {
   clearAllCollections 
 } from '../../utils/hardcodedDatabaseSetup';
 import { setupSamplePendingBookings } from '../../utils/bookingUtils';
+import { createSamplePendingBookings } from '../../utils/createPendingBookings';
 
 
 export default function HomeScreen({ navigation }) {
@@ -50,6 +51,25 @@ const [dbStatus, setDbStatus] = useState(null);
   
   // 3. Test with your current account
   console.log('Role system setup complete!');
+};
+
+// Add this function to your component:
+const handleCreatePendingBookings = async () => {
+  try {
+    console.log('🔄 Creating pending bookings...');
+    const result = await createSamplePendingBookings();
+    
+    if (result.success) {
+      Alert.alert('✅ Success', result.message);
+      console.log('✅ Pending bookings created successfully!');
+    } else {
+      Alert.alert('❌ Error', result.error);
+      console.error('❌ Error:', result.error);
+    }
+  } catch (error) {
+    Alert.alert('❌ Error', error.message);
+    console.error('❌ Script error:', error);
+  }
 };
   
 // Function to add bookings for current user
@@ -366,47 +386,7 @@ const handleSetupCompleteDatabase = async () => {
       </Button>
     </View>
     
-    {/* Court Admin Testing Buttons */}
-    <Text variant="bodyMedium" style={styles.sectionTitle}>
-      📋 Booking Approval Testing:
-    </Text>
-    
-    <View style={styles.buttonRow}>
-      <Button 
-        mode="outlined" 
-        onPress={handleSetupPendingBookings}
-        loading={setupLoading}
-        style={[styles.setupButton, styles.testingButton]}
-        disabled={setupLoading}
-        icon="clock-outline"
-      >
-        Create Pending Bookings
-      </Button>
-      
-      <Button 
-        mode="outlined" 
-        onPress={handleAddCurrentUserBookings}
-        loading={setupLoading}
-        style={[styles.setupButton, styles.testingButton]}
-        disabled={setupLoading || !auth.currentUser}
-        icon="calendar-plus"
-      >
-        Add My Bookings
-      </Button>
-    </View>
-    
-    {/* Utility Buttons */}
-    <View style={styles.buttonRow}>
-      <Button 
-        mode="outlined" 
-        onPress={handleClearDatabase}
-        style={[styles.setupButton, styles.dangerButton]}
-        disabled={setupLoading}
-        icon="delete"
-      >
-        🗑️ Clear All
-      </Button>
-    </View>
+   
     
     <Text style={styles.warningText}>
       ⚠️ Remove this section before production deployment
@@ -419,9 +399,6 @@ const handleSetupCompleteDatabase = async () => {
       </Text>
       <Text variant="bodySmall" style={styles.instructionsText}>
         1. Setup complete database with "Setup All Data"
-        2. Create additional pending bookings for testing
-        3. Switch to Court Admin role to test approval feature
-        4. Go to "Approve Bookings" tab to see pending bookings
       </Text>
     </View>
   </Card.Content>
@@ -496,6 +473,16 @@ const handleSetupCompleteDatabase = async () => {
             </Card.Content>
           </Card>
         )}
+
+        // Create Test Pending Bookings Button
+<Button
+  mode="contained"
+  onPress={handleCreatePendingBookings}
+  style={{ margin: 10 }}
+  icon="clock-outline"
+>
+  Create Test Pending Bookings
+</Button>
 
         {/* Recent Bookings */}
         {recentBookings.length > 0 && (

@@ -321,16 +321,7 @@ export default function MyBookingsScreen({ navigation }) {
         )}
       </ScrollView>
 
-      {/* Floating Action Button */}
-      <FAB
-        icon="plus"
-        style={styles.fab}
-        onPress={() => navigation.navigate('Courts')}
-        label="Book Court"
-        textColor="white"
-  iconColor="white"
-  labelStyle={{ color: 'white', fontWeight: 'bold' }}
-      />
+      
 
       {/* Booking Details Modal */}
       <Portal>
