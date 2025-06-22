@@ -54,40 +54,63 @@ export default function MyBookingsScreen({ navigation }) {
     setRefreshing(false);
   };
 
-  const getFilteredBookings = () => {
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    const currentTime = now.getHours() * 100 + now.getMinutes();
+  // 🔧 UPDATE the getFilteredBookings function to handle new statuses:
+const getFilteredBookings = () => {
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const currentTime = now.getHours() * 100 + now.getMinutes();
 
-    return bookings.filter(booking => {
-      // Filter by status
-      if (filterStatus === 'upcoming') {
+  return bookings.filter(booking => {
+    // Filter by status first, then by time if needed
+    if (filterStatus === 'upcoming') {
+      // Show pending, approved future bookings
+      if (booking.status === 'pending' || booking.status === 'approved') {
         return booking.date > today || 
                (booking.date === today && parseInt(booking.timeSlot.replace(':', '')) > currentTime);
-      } else if (filterStatus === 'past') {
+      }
+      return false;
+    } else if (filterStatus === 'past') {
+      // Show completed bookings (approved + past time)
+      if (booking.status === 'approved') {
         return booking.date < today || 
                (booking.date === today && parseInt(booking.timeSlot.replace(':', '')) < currentTime);
-      } else if (filterStatus === 'cancelled') {
-        return booking.status === 'cancelled';
       }
-      return true; // 'all'
-    });
-  };
-
-  const getStatusColor = (status, date, timeSlot) => {
-    if (status === 'cancelled') return '#F44336';
-    
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    const currentTime = now.getHours() * 100 + now.getMinutes();
-    const bookingTime = parseInt(timeSlot.replace(':', ''));
-    
-    if (date < today || (date === today && bookingTime < currentTime)) {
-      return '#4CAF50'; // Past - Green
-    } else {
-      return '#2196F3'; // Upcoming - Blue
+      return false;
+    } else if (filterStatus === 'cancelled') {
+      return booking.status === 'cancelled' || booking.status === 'rejected';
     }
-  };
+    return true; // 'all'
+  });
+};
+
+  // 🔧 REPLACE the getStatusColor function with this FIXED version:
+const getStatusColor = (booking) => {
+  const { status, date, timeSlot } = booking;
+  
+  // ✅ FIXED: Check actual booking status first
+  switch (status) {
+    case 'pending':
+      return '#FF9800'; // Orange - waiting for approval
+    case 'approved':
+      return '#4CAF50'; // Green - approved
+    case 'rejected':
+      return '#F44336'; // Red - rejected
+    case 'cancelled':
+      return '#757575'; // Grey - cancelled
+    default:
+      // Fallback to time-based status for legacy bookings
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const currentTime = now.getHours() * 100 + now.getMinutes();
+      const bookingTime = parseInt(timeSlot.replace(':', ''));
+      
+      if (date < today || (date === today && bookingTime < currentTime)) {
+        return '#4CAF50'; // Past - Green
+      } else {
+        return '#2196F3'; // Upcoming - Blue
+      }
+  }
+};
 
   const getStatusText = (status, date, timeSlot) => {
     if (status === 'cancelled') return 'CANCELLED';
@@ -147,6 +170,22 @@ export default function MyBookingsScreen({ navigation }) {
     }
   };
 
+  // 🔧 ADD this helper function to show status-specific messages:
+const getStatusMessage = (booking) => {
+  switch (booking.status) {
+    case 'pending':
+      return '⏳ Waiting for admin approval';
+    case 'approved':
+      return '✅ Approved and confirmed';
+    case 'rejected':
+      return '❌ Booking was rejected';
+    case 'cancelled':
+      return '🚫 Booking was cancelled';
+    default:
+      return '';
+  }
+};
+
   const showBookingDetails = (booking) => {
     setSelectedBooking(booking);
     setShowDetailsModal(true);
@@ -195,15 +234,15 @@ export default function MyBookingsScreen({ navigation }) {
               ID: {booking.id.slice(-8)}
             </Text>
           </View>
-          <Chip 
-            mode="flat"
-            style={[styles.statusChip, { 
-              backgroundColor: getStatusColor(booking.status, booking.date, booking.timeSlot) 
-            }]}
-            textStyle={styles.statusText}
-          >
-            {getStatusText(booking.status, booking.date, booking.timeSlot)}
-          </Chip>
+         <Chip 
+                   mode="flat"
+                     style={[styles.statusChip, { 
+                 backgroundColor: getStatusColor(booking) 
+                                    }]}
+                  textStyle={styles.statusText}
+              >
+            {getStatusText(booking)}
+        </Chip>
         </View>
 
         <View style={styles.bookingDetails}>
@@ -228,6 +267,45 @@ export default function MyBookingsScreen({ navigation }) {
           )}
         </View>
       </Card.Content>
+
+      // 🔧 ADD status message in the booking details section:
+<View style={styles.bookingDetails}>
+  <Text variant="bodyMedium" style={styles.dateText}>
+    📅 {formatDate(booking.date)}
+  </Text>
+  <Text variant="bodyMedium" style={styles.timeText}>
+    ⏰ {booking.timeSlot} - {calculateEndTime(booking.timeSlot, booking.duration)} ({booking.duration || 1}h)
+  </Text>
+  <Text variant="bodyMedium" style={styles.priceText}>
+    💰 RM {formatPrice(booking)}
+  </Text>
+  
+  {/* ✅ ADD: Status message */}
+  {getStatusMessage(booking) && (
+    <Text variant="bodySmall" style={[styles.statusMessage, {
+      color: getStatusColor(booking)
+    }]}>
+      {getStatusMessage(booking)}
+    </Text>
+  )}
+  
+  {booking.rejectionReason && (
+    <Text variant="bodySmall" style={styles.rejectionText}>
+      💬 Reason: {booking.rejectionReason}
+    </Text>
+  )}
+  
+  {booking.needOpponent && (
+    <Text variant="bodySmall" style={styles.opponentText}>
+      🤝 Looking for opponent
+    </Text>
+  )}
+  {booking.facilityName && (
+    <Text variant="bodySmall" style={styles.facilityText}>
+      📍 {booking.facilityName}
+    </Text>
+  )}
+</View>
 
       <Card.Actions style={styles.cardActions}>
         <Button 
@@ -279,17 +357,18 @@ export default function MyBookingsScreen({ navigation }) {
     <View style={styles.container}>
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
-        <SegmentedButtons
-          value={filterStatus}
-          onValueChange={setFilterStatus}
-          buttons={[
-            { value: 'all', label: 'All' },
-            { value: 'upcoming', label: 'Upcoming' },
-            { value: 'past', label: 'Past' },
-            { value: 'cancelled', label: 'Cancelled' },
-          ]}
-          style={styles.segmentedButtons}
-        />
+        // 🔧 UPDATE the filter tabs to reflect new status types:
+              <SegmentedButtons
+             value={filterStatus}
+              onValueChange={setFilterStatus}
+               buttons={[
+                { value: 'all', label: 'All' },
+                { value: 'upcoming', label: 'Upcoming' }, // Now includes pending + approved future
+               { value: 'past', label: 'Past' },         // Completed bookings
+               { value: 'cancelled', label: 'Cancelled' }, // Includes rejected + cancelled
+  ]}
+  style={styles.segmentedButtons}
+/>
       </View>
 
       <ScrollView 
@@ -565,6 +644,15 @@ statusText: {
     fontWeight: 'bold',
     color: Colors.onSurface,
     flex: 1,
+  },
+   statusMessage: {
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  rejectionText: {
+    color: '#F44336',
+    marginTop: 4,
+    fontStyle: 'italic',
   },
   detailValue: {
     color: Colors.onSurface,

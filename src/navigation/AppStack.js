@@ -5,12 +5,18 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { Colors } from '../constants/Colors';
+// ✅ OPTIONAL: Enhanced version with notification badge
+import { useAuth } from '../contexts/AuthContext';
+import { useState, useEffect } from 'react';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../constants/firebaseConfig';
 
 // Import screens
 import HomeScreen from '../screens/app/HomeScreen';
 import CourtsScreen from '../screens/app/CourtsScreen';
 import BookCourtScreen from '../screens/app/BookCourtScreen';
 import MyBookingsScreen from '../screens/app/MyBookingsScreen';
+import NotificationsScreen from '../screens/app/NotificationsScreen';
 import ProfileScreen from '../screens/app/ProfileScreen';
 
 const Stack = createStackNavigator();
@@ -18,6 +24,31 @@ const Tab = createBottomTabNavigator();
 
 // Main Tabs Navigator
 function MainTabs() {
+    const { user } = useAuth();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+
+    // Real-time listener for unread notifications
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', '==', user.uid),
+      where('read', '==', false)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setUnreadCount(snapshot.size);
+    }, (error) => {
+      console.error('Error listening to notifications:', error);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+  
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -26,7 +57,10 @@ function MainTabs() {
           if (route.name === 'Home') iconName = 'home';
           else if (route.name === 'Courts') iconName = 'sports';
           else if (route.name === 'MyBookings') iconName = 'calendar-today';
+          else if (route.name === 'Notifications') {  // ✅ NEW
+            iconName = 'notifications';}
           else if (route.name === 'Profile') iconName = 'person';
+
           return <MaterialIcons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: Colors.primary,
@@ -62,6 +96,16 @@ function MainTabs() {
         options={{
           title: 'My Bookings',
           tabBarLabel: 'Bookings',
+        }}
+      />
+       {/* ✅ NEW: Notifications Tab */}
+      <Tab.Screen 
+        name="Notifications" 
+        component={NotificationsScreen}
+        options={{ 
+          title: 'Notifications',
+          // Optional: Add badge for unread notifications
+          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
         }}
       />
       <Tab.Screen 

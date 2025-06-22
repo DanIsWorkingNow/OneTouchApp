@@ -120,92 +120,120 @@ export default function BookingApprovalScreen() {
     setShowRejectModal(true);
   };
 
-  const processBookingApproval = async (booking, newStatus, reason = '') => {
+  // 🔧 REPLACE the processBookingApproval function with this SAFER version:
+const processBookingApproval = async (booking, newStatus, reason = '') => {
+  try {
+    setSubmitting(true);
+    const currentUser = auth.currentUser;
+    
+    console.log('🔄 Processing booking approval:', { bookingId: booking.id, newStatus, reason });
+    
+    const updateData = {
+      status: newStatus,
+      [`${newStatus}By`]: currentUser.uid,
+      [`${newStatus}Date`]: new Date(),
+      updatedAt: new Date()
+    };
+
+    if (newStatus === 'rejected' && reason) {
+      updateData.rejectionReason = reason;
+    }
+
+    // ✅ STEP 1: Update booking status (CRITICAL - do this first)
+    console.log('📝 Updating booking status...');
+    await updateDoc(doc(db, 'bookings', booking.id), updateData);
+    console.log('✅ Booking status updated successfully');
+
+    // ✅ STEP 2: Send notification (non-critical - continue if fails)
     try {
-      setSubmitting(true);
-      const currentUser = auth.currentUser;
-      
-      const updateData = {
-        status: newStatus,
-        [`${newStatus}By`]: currentUser.uid,
-        [`${newStatus}Date`]: new Date(),
-        updatedAt: new Date()
-      };
-
-      if (newStatus === 'rejected' && reason) {
-        updateData.rejectionReason = reason;
-      }
-
-      // Update booking status
-      await updateDoc(doc(db, 'bookings', booking.id), updateData);
-
-      // Send notification to user
       await sendNotificationToUser(booking, newStatus, reason);
+    } catch (notificationError) {
+      console.warn('⚠️ Notification failed but continuing:', notificationError);
+    }
 
-      // Create activity log
+    // ✅ STEP 3: Create activity log (non-critical - continue if fails)
+    try {
       await createActivityLog(booking, newStatus, reason);
-
-      Alert.alert(
-        'Success',
-        `Booking ${newStatus} successfully!`,
-        [{ text: 'OK', onPress: () => {
-          setShowRejectModal(false);
-          loadBookings();
-        }}]
-      );
-
-    } catch (error) {
-      console.error('Error updating booking:', error);
-      Alert.alert('Error', 'Failed to update booking status');
-    } finally {
-      setSubmitting(false);
+    } catch (logError) {
+      console.warn('⚠️ Activity log failed but continuing:', logError);
     }
-  };
 
-  const sendNotificationToUser = async (booking, status, reason = '') => {
-    try {
-      const notificationData = {
-        userId: booking.userId,
-        title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-        message: status === 'approved' 
-          ? `Your booking for ${booking.courtNumber} on ${formatDate(booking.date)} has been approved!`
-          : `Your booking for ${booking.courtNumber} on ${formatDate(booking.date)} has been rejected. ${reason ? `Reason: ${reason}` : ''}`,
-        type: 'booking_update',
-        data: {
-          bookingId: booking.id,
-          status: status
-        },
-        createdAt: new Date(),
-        read: false
-      };
+    Alert.alert(
+      '✅ Success',
+      `Booking ${newStatus} successfully!`,
+      [{ text: 'OK', onPress: () => {
+        setShowRejectModal(false);
+        loadBookings(); // Refresh the list
+      }}]
+    );
 
-      await addDoc(collection(db, 'notifications'), notificationData);
-      console.log('Notification sent to user');
-    } catch (error) {
-      console.error('Error sending notification:', error);
-    }
-  };
+  } catch (error) {
+    console.error('❌ Critical error updating booking:', error);
+    Alert.alert('❌ Error', 'Failed to update booking status. Please try again.');
+  } finally {
+    setSubmitting(false);
+  }
+};
 
-  const createActivityLog = async (booking, action, reason = '') => {
-    try {
-      const logData = {
-        type: 'booking_approval',
-        action: action,
+  // 🔧 REPLACE the sendNotificationToUser function with this FIXED version:
+const sendNotificationToUser = async (booking, status, reason = '') => {
+  try {
+    // ✅ FIXED: Use courtName OR courtNumber, whichever exists
+    const courtDisplayName = booking.courtName || booking.courtNumber || 'Court';
+    
+    const notificationData = {
+      userId: booking.userId,
+      title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
+      message: status === 'approved' 
+        ? `Your booking for ${courtDisplayName} on ${formatDate(booking.date)} has been approved!`
+        : `Your booking for ${courtDisplayName} on ${formatDate(booking.date)} has been rejected. ${reason ? `Reason: ${reason}` : ''}`,
+      type: 'booking_update',
+      data: {
         bookingId: booking.id,
-        adminId: auth.currentUser.uid,
-        adminEmail: auth.currentUser.email,
-        userId: booking.userId,
-        courtNumber: booking.courtNumber,
-        bookingDate: booking.date,
-        reason: reason,
-        timestamp: new Date()
-      };
+        status: status,
+        courtName: courtDisplayName,
+        date: booking.date,
+        timeSlot: booking.timeSlot
+      },
+      createdAt: new Date(),
+      read: false
+    };
 
-      await addDoc(collection(db, 'activityLogs'), logData);
-    } catch (error) {
-      console.error('Error creating activity log:', error);
-    }
-  };
+    console.log('📤 Sending notification:', notificationData);
+    await addDoc(collection(db, 'notifications'), notificationData);
+    console.log('✅ Notification sent successfully');
+  } catch (error) {
+    console.error('❌ Error sending notification:', error);
+    // Don't throw error - continue with booking approval even if notification fails
+  }
+};
+
+  // 🔧 REPLACE the createActivityLog function with this FIXED version:
+const createActivityLog = async (booking, action, reason = '') => {
+  try {
+    const logData = {
+      type: 'booking_approval',
+      action: action,
+      bookingId: booking.id,
+      adminId: auth.currentUser.uid,
+      adminEmail: auth.currentUser.email,
+      userId: booking.userId,
+      // ✅ FIXED: Handle both courtNumber and courtName fields
+      courtNumber: booking.courtNumber || booking.courtName || 'Unknown Court',
+      courtName: booking.courtName || booking.courtNumber || 'Unknown Court', 
+      bookingDate: booking.date,
+      reason: reason,
+      timestamp: new Date()
+    };
+
+    console.log('📝 Creating activity log:', logData);
+    await addDoc(collection(db, 'activityLogs'), logData);
+    console.log('✅ Activity log created successfully');
+  } catch (error) {
+    console.error('❌ Error creating activity log:', error);
+    // Don't throw error - continue with booking approval even if logging fails
+  }
+};
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-MY', {
