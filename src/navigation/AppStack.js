@@ -5,7 +5,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 
 import { Colors } from '../constants/Colors';
-// ✅ OPTIONAL: Enhanced version with notification badge
 import { useAuth } from '../contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -57,8 +56,7 @@ function MainTabs() {
           if (route.name === 'Home') iconName = 'home';
           else if (route.name === 'Courts') iconName = 'sports';
           else if (route.name === 'MyBookings') iconName = 'calendar-today';
-          else if (route.name === 'Notifications') {  // ✅ NEW
-            iconName = 'notifications';}
+          else if (route.name === 'Notifications') {iconName = 'notifications';}
           else if (route.name === 'Profile') iconName = 'person';
 
           return <MaterialIcons name={iconName} size={size} color={color} />;
@@ -98,16 +96,18 @@ function MainTabs() {
           tabBarLabel: 'Bookings',
         }}
       />
-       {/* ✅ NEW: Notifications Tab */}
       <Tab.Screen 
-        name="Notifications" 
-        component={NotificationsScreen}
-        options={{ 
-          title: 'Notifications',
-          // Optional: Add badge for unread notifications
-          tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
-        }}
-      />
+          name="Notifications" 
+            component={NotificationsScreen}
+            options={{ 
+             title: 'Notifications',
+          tabBarLabel: 'Notifications',
+        // Optional: Add badge for unread notifications
+             tabBarIcon: ({ focused, color, size }) => (
+      <MaterialIcons name="notifications" size={size} color={color} />
+    ),
+  }}
+/>
       <Tab.Screen 
         name="Profile" 
         component={ProfileScreen}
