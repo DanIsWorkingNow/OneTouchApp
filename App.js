@@ -1,4 +1,4 @@
-// App.js - COMPLETE MOBILE FIX (Keep Your Full Structure) + AuthContext
+// App.js - ENHANCED WITH ROLE-BASED ROUTING (Preserving Your Complete Structure)
 // ⚠️ CRITICAL: This import MUST be at the very top for mobile to work
 import 'react-native-gesture-handler';
 
@@ -16,10 +16,10 @@ import { Platform, Alert } from 'react-native';
 import { Colors } from './src/constants/Colors';
 import { auth } from './src/constants/firebaseConfig';
 
-// ADD THIS LINE: Import AuthContext
-import { AuthProvider } from './src/contexts/AuthContext';
+// Import AuthContext and useAuth hook
+import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 
-// Import screens with correct paths
+// Import your existing screens (KEEP ALL YOUR EXISTING IMPORTS)
 import HomeScreen from './src/screens/app/HomeScreen';
 import CourtsScreen from './src/screens/app/CourtsScreen';
 import BookCourtScreen from './src/screens/app/BookCourtScreen';
@@ -29,10 +29,14 @@ import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
 import LoadingScreen from './src/components/LoadingScreen';
 
+// Import admin navigation stacks
+import SystemAdminStack from './src/navigation/SystemAdminStack';
+import CourtAdminStack from './src/navigation/CourtAdminStack';
+
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Auth Stack for login/register
+// Auth Stack for login/register (UNCHANGED - KEEP YOUR EXACT IMPLEMENTATION)
 function AuthStack() {
   return (
     <Stack.Navigator 
@@ -47,7 +51,7 @@ function AuthStack() {
   );
 }
 
-// Main Tabs Navigator
+// Main Tabs Navigator (UNCHANGED - KEEP YOUR EXACT IMPLEMENTATION)
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -75,8 +79,8 @@ function MainTabs() {
   );
 }
 
-// App Stack for authenticated users
-function AppStack() {
+// App Stack for regular users (UNCHANGED - KEEP YOUR EXACT IMPLEMENTATION)
+function UserAppStack() {
   return (
     <Stack.Navigator
       screenOptions={{
@@ -102,7 +106,42 @@ function AppStack() {
   );
 }
 
-// Main App Component - Enhanced for Mobile Compatibility
+// NEW: Role-based routing component
+function AppContent() {
+  const { user, userRole, loading } = useAuth();
+
+  console.log('🔍 AppContent - User:', user?.email);
+  console.log('🔍 AppContent - Role:', userRole);
+  console.log('🔍 AppContent - Loading:', loading);
+
+  // Show loading screen while determining user role
+  if (loading) {
+    return <LoadingScreen />;
+  }
+
+  // If no user, show auth stack
+  if (!user) {
+    return <AuthStack />;
+  }
+
+  // Route based on user role
+  switch (userRole) {
+    case 'systemAdmin':
+      console.log('🏛️ Routing to SystemAdminStack');
+      return <SystemAdminStack />;
+      
+    case 'courtAdmin':
+      console.log('🏢 Routing to CourtAdminStack');
+      return <CourtAdminStack />;
+      
+    case 'user':
+    default:
+      console.log('👤 Routing to UserAppStack (regular user)');
+      return <UserAppStack />;
+  }
+}
+
+// Main App Component (ENHANCED - PRESERVING ALL YOUR MOBILE COMPATIBILITY)
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -111,7 +150,7 @@ export default function App() {
     console.log('🎾 One Touch App - Starting...');
     console.log('📱 Platform:', Platform.OS);
     
-    // Enhanced Firebase initialization check for mobile
+    // Enhanced Firebase initialization check for mobile (UNCHANGED)
     if (!auth) {
       console.error('❌ Firebase auth not initialized');
       if (Platform.OS !== 'web') {
@@ -137,7 +176,7 @@ export default function App() {
         console.error('Error code:', error.code);
         console.error('Error message:', error.message);
         
-        // Show user-friendly error on mobile
+        // Show user-friendly error on mobile (UNCHANGED)
         if (Platform.OS !== 'web') {
           Alert.alert(
             'Authentication Error',
@@ -162,10 +201,10 @@ export default function App() {
     }
   }, []);
 
+  // Show loading screen while Firebase initializes (UNCHANGED)
   if (loading) {
     return (
       <PaperProvider>
-        {/* WRAP WITH AuthProvider */}
         <AuthProvider>
           <LoadingScreen />
         </AuthProvider>
@@ -173,12 +212,13 @@ export default function App() {
     );
   }
 
+  // MAIN RETURN - ENHANCED WITH ROLE-BASED ROUTING
   return (
     <PaperProvider>
-      {/* WRAP WITH AuthProvider */}
       <AuthProvider>
         <NavigationContainer>
-          {user ? <AppStack /> : <AuthStack />}
+          {/* NEW: Use AppContent for role-based routing instead of direct routing */}
+          <AppContent />
         </NavigationContainer>
       </AuthProvider>
     </PaperProvider>

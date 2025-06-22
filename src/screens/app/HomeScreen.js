@@ -12,6 +12,8 @@ import { Colors } from '../../constants/Colors';
 import { setupDemoCourts, checkIfCourtsExist } from '../../utils/setupDemoData';
 import DatabaseSetupComponent from '../../components/DatabaseSetupComponent';
 import RoleTestComponent from '../../components/RoleTestComponent';
+import { createRolesCollection, updateAllUsersWithPermissions } from '../utils/databaseSetup';
+
 
 export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
@@ -25,6 +27,17 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  const setupRoleSystem = async () => {
+  // 1. Create roles collection
+  await createRolesCollection();
+  
+  // 2. Update existing users with permissions
+  await updateAllUsersWithPermissions();
+  
+  // 3. Test with your current account
+  console.log('Role system setup complete!');
+};
 
   const loadDashboardData = async () => {
     try {
