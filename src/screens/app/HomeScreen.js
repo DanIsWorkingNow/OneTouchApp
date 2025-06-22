@@ -13,6 +13,7 @@ import { setupDemoCourts, checkIfCourtsExist } from '../../utils/setupDemoData';
 import DatabaseSetupComponent from '../../components/DatabaseSetupComponent';
 import RoleTestComponent from '../../components/RoleTestComponent';
 import { createRolesCollection, updateAllUsersWithPermissions } from '../../utils/databaseSetup';
+import { setupSamplePendingBookings } from '../../utils/bookingUtils';
 
 
 export default function HomeScreen({ navigation }) {
@@ -37,6 +38,57 @@ export default function HomeScreen({ navigation }) {
   
   // 3. Test with your current account
   console.log('Role system setup complete!');
+};
+  
+// Function to setup sample pending bookings for testing approval feature
+const handleSetupPendingBookings = async () => {
+  setSetupLoading(true);
+  try {
+    console.log('🔄 Creating sample pending bookings...');
+    
+    const result = await setupSamplePendingBookings();
+    
+    if (result.success) {
+      Alert.alert(
+        '📋 Pending Bookings Created!', 
+        result.message,
+        [{ text: 'OK', onPress: checkDatabaseStatus }]
+      );
+    } else {
+      Alert.alert('❌ Error', result.message || result.error);
+    }
+  } catch (error) {
+    console.error('Error creating pending bookings:', error);
+    Alert.alert('❌ Error', 'Failed to create pending bookings: ' + error.message);
+  } finally {
+    setSetupLoading(false);
+  }
+};
+
+// Enhanced complete database setup with pending bookings
+const handleSetupCompleteDatabase = async () => {
+  setSetupLoading(true);
+  try {
+    console.log('🚀 Starting complete database setup...');
+    
+    // Call the enhanced setup function with pending bookings
+    const result = await setupCompleteDatabase(true, true); // clearExisting = true, includePendingBookings = true
+    
+    if (result.success) {
+      Alert.alert(
+        '🎉 Setup Complete!', 
+        result.message,
+        [{ text: 'OK', onPress: checkDatabaseStatus }]
+      );
+    } else {
+      Alert.alert('❌ Setup Failed', result.message || result.error);
+    }
+  } catch (error) {
+    console.error('Setup error:', error);
+    Alert.alert('❌ Error', 'Database setup failed: ' + error.message);
+  } finally {
+    setSetupLoading(false);
+  }
 };
 
   const loadDashboardData = async () => {
@@ -193,6 +245,114 @@ export default function HomeScreen({ navigation }) {
               </Text>
             </Card.Content>
           </Card>
+
+          // Add this to your JSX return statement in HomeScreen (replace the existing database setup card):
+
+{/* Enhanced Database Setup Card - Development Only */}
+<Card style={styles.setupCard}>
+  <Card.Content>
+    <Text variant="titleMedium" style={styles.setupTitle}>
+      🗄️ Database Setup (Development)
+    </Text>
+    
+    {/* Database Status */}
+    {dbStatus && (
+      <View style={styles.statusContainer}>
+        <Text style={styles.statusTitle}>📊 Current Status:</Text>
+        <Text style={styles.statusText}>
+          🏟️ Courts: {dbStatus.courts?.count || 0} documents
+        </Text>
+        <Text style={styles.statusText}>
+          👥 Users: {dbStatus.users?.count || 0} documents  
+        </Text>
+        <Text style={styles.statusText}>
+          📅 Bookings: {dbStatus.bookings?.count || 0} documents
+        </Text>
+      </View>
+    )}
+    
+    {/* Setup Buttons */}
+    <View style={styles.buttonRow}>
+      <Button 
+        mode="contained" 
+        onPress={handleSetupCompleteDatabase}
+        loading={setupLoading}
+        style={[styles.setupButton, styles.primaryButton]}
+        disabled={setupLoading}
+      >
+        🚀 Setup All Data
+      </Button>
+      
+      <Button 
+        mode="outlined" 
+        onPress={checkDatabaseStatus}
+        style={styles.setupButton}
+        disabled={setupLoading}
+      >
+        📊 Check Status
+      </Button>
+    </View>
+    
+    {/* Court Admin Testing Buttons */}
+    <Text variant="bodyMedium" style={styles.sectionTitle}>
+      📋 Booking Approval Testing:
+    </Text>
+    
+    <View style={styles.buttonRow}>
+      <Button 
+        mode="outlined" 
+        onPress={handleSetupPendingBookings}
+        loading={setupLoading}
+        style={[styles.setupButton, styles.testingButton]}
+        disabled={setupLoading}
+        icon="clock-outline"
+      >
+        Create Pending Bookings
+      </Button>
+      
+      <Button 
+        mode="outlined" 
+        onPress={handleAddCurrentUserBookings}
+        loading={setupLoading}
+        style={[styles.setupButton, styles.testingButton]}
+        disabled={setupLoading || !auth.currentUser}
+        icon="calendar-plus"
+      >
+        Add My Bookings
+      </Button>
+    </View>
+    
+    {/* Utility Buttons */}
+    <View style={styles.buttonRow}>
+      <Button 
+        mode="outlined" 
+        onPress={handleClearDatabase}
+        style={[styles.setupButton, styles.dangerButton]}
+        disabled={setupLoading}
+        icon="delete"
+      >
+        🗑️ Clear All
+      </Button>
+    </View>
+    
+    <Text style={styles.warningText}>
+      ⚠️ Remove this section before production deployment
+    </Text>
+    
+    {/* Instructions for Court Admin Testing */}
+    <View style={styles.instructionsContainer}>
+      <Text variant="bodySmall" style={styles.instructionsTitle}>
+        🧪 Testing Instructions:
+      </Text>
+      <Text variant="bodySmall" style={styles.instructionsText}>
+        1. Setup complete database with "Setup All Data"
+        2. Create additional pending bookings for testing
+        3. Switch to Court Admin role to test approval feature
+        4. Go to "Approve Bookings" tab to see pending bookings
+      </Text>
+    </View>
+  </Card.Content>
+</Card>
           
           <Card style={styles.statCard}>
             <Card.Content style={styles.statContent}>
@@ -458,6 +618,30 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     paddingVertical: 4,
+  },
+   databasesectionTitle: {
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+    color: '#1976d2',
+  },
+  testingButton: {
+    borderColor: '#ff9800',
+  },
+  instructionsContainer: {
+    backgroundColor: '#e3f2fd',
+    padding: 12,
+    borderRadius: 6,
+    marginTop: 16,
+  },
+  instructionsTitle: {
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#1976d2',
+  },
+  instructionsText: {
+    lineHeight: 18,
+    color: '#1565c0',
   },
   buttonContent: {
     paddingVertical: 8,

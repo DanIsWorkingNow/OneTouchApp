@@ -1,6 +1,7 @@
 // src/utils/hardcodedDatabaseSetup.js
 import { collection, addDoc, setDoc, doc, getDocs, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../constants/firebaseConfig';
+import { createSamplePendingBookings } from './bookingUtils';
 
 // 🗄️ HARDCODED DATABASE STRUCTURE
 
@@ -34,36 +35,6 @@ const hardcodedCourts = [
     status: "available",
     timeSlots: ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"],
     amenities: ["Parking", "Changing Room", "Water Dispenser"],
-    createdAt: new Date()
-  },
-  {
-    courtNumber: "Court 4",
-    facilityName: "One Touch Futsal",
-    location: "Temerloh, Pahang",
-    pricePerHour: 75,
-    status: "available",
-    timeSlots: ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"],
-    amenities: ["Parking", "Changing Room"],
-    createdAt: new Date()
-  },
-  {
-    courtNumber: "Court 5",
-    facilityName: "One Touch Futsal",
-    location: "Temerloh, Pahang",
-    pricePerHour: 70,
-    status: "maintenance",
-    timeSlots: ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"],
-    amenities: ["Parking"],
-    createdAt: new Date()
-  },
-  {
-    courtNumber: "Court 6",
-    facilityName: "One Touch Futsal",
-    location: "Temerloh, Pahang",
-    pricePerHour: 70,
-    status: "available",
-    timeSlots: ["06:00", "07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"],
-    amenities: ["Parking", "Water Dispenser"],
     createdAt: new Date()
   }
 ];
@@ -247,6 +218,38 @@ export const setupCourtsCollection = async () => {
   }
 };
 
+// NEW FUNCTION: Setup sample pending bookings for testing approval feature
+export const setupSamplePendingBookings = async () => {
+  try {
+    console.log('🔄 Setting up sample pending bookings for approval testing...');
+
+    const result = await createSamplePendingBookings();
+    
+    if (result.success) {
+      console.log('🎉 Sample pending bookings created successfully!');
+      return {
+        success: true,
+        message: `✅ Created ${result.count} pending bookings for testing booking approval feature`,
+        count: result.count
+      };
+    } else {
+      return {
+        success: false,
+        message: result.message || 'Failed to create sample bookings',
+        error: result.error
+      };
+    }
+
+  } catch (error) {
+    console.error('❌ Error setting up sample pending bookings:', error);
+    return {
+      success: false,
+      message: 'Failed to create sample pending bookings',
+      error: error.message
+    };
+  }
+};
+
 // Setup Users Collection
 export const setupUsersCollection = async () => {
   try {
@@ -272,40 +275,16 @@ export const setupUsersCollection = async () => {
   }
 };
 
-// Setup Bookings Collection
-export const setupBookingsCollection = async (courtIds) => {
-  try {
-    console.log('📅 Setting up bookings collection...');
-    
-    if (!courtIds || courtIds.length === 0) {
-      throw new Error('Court IDs are required to create bookings');
-    }
-    
-    const bookings = getHardcodedBookings(courtIds);
-    
-    for (const booking of bookings) {
-      const docRef = await addDoc(collection(db, 'bookings'), booking);
-      console.log(`✅ Added booking: ${booking.courtNumber} on ${booking.date} at ${booking.timeSlot}`);
-    }
-    
-    console.log(`📋 Bookings collection setup complete! Added ${bookings.length} bookings.`);
-    return { success: true, message: `${bookings.length} bookings added successfully` };
-  } catch (error) {
-    console.error('❌ Error setting up bookings:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// 🎯 COMPLETE SETUP FUNCTION
-export const setupCompleteDatabase = async (clearFirst = false) => {
+// ENHANCED: Complete database setup with pending bookings option
+export const setupCompleteDatabase = async (clearExisting = false, includePendingBookings = true) => {
   try {
     console.log('🚀 Starting complete database setup...');
     
-    // Optional: Clear existing data first
-    if (clearFirst) {
+    if (clearExisting) {
+      console.log('🗑️ Clearing existing data...');
       const clearResult = await clearAllCollections();
       if (!clearResult.success) {
-        throw new Error(`Failed to clear collections: ${clearResult.error}`);
+        console.warn('⚠️ Failed to clear existing data, continuing anyway...');
       }
     }
     
@@ -321,21 +300,34 @@ export const setupCompleteDatabase = async (clearFirst = false) => {
       throw new Error(`Failed to setup users: ${usersResult.error}`);
     }
     
-    // 3. Setup Bookings (using court IDs from step 1)
+    // 3. Setup Initial Bookings (confirmed/completed)
     const bookingsResult = await setupBookingsCollection(courtsResult.courtIds);
     if (!bookingsResult.success) {
       throw new Error(`Failed to setup bookings: ${bookingsResult.error}`);
+    }
+
+    // 4. Setup Sample Pending Bookings (for testing approval feature)
+    let pendingBookingsMessage = '';
+    if (includePendingBookings) {
+      console.log('📋 Setting up sample pending bookings...');
+      const pendingResult = await setupSamplePendingBookings();
+      if (pendingResult.success) {
+        pendingBookingsMessage = `\n📋 ${pendingResult.count} pending bookings for approval testing`;
+      } else {
+        console.warn('⚠️ Failed to create pending bookings:', pendingResult.error);
+      }
     }
     
     console.log('🎉 Complete database setup finished successfully!');
     
     return {
       success: true,
-      message: `🎯 Database setup complete!\n✅ ${hardcodedCourts.length} courts\n✅ ${hardcodedUsers.length} users\n✅ ${getHardcodedBookings(['dummy']).length} bookings`,
+      message: `🎯 Database setup complete!\n✅ ${hardcodedCourts.length} courts\n✅ ${hardcodedUsers.length} users\n✅ ${getHardcodedBookings(['dummy']).length} confirmed bookings${pendingBookingsMessage}`,
       data: {
         courts: hardcodedCourts.length,
         users: hardcodedUsers.length,
-        bookings: getHardcodedBookings(['dummy']).length
+        confirmedBookings: getHardcodedBookings(['dummy']).length,
+        pendingBookings: includePendingBookings ? 3 : 0
       }
     };
     
