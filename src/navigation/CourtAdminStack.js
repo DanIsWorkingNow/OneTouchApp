@@ -9,7 +9,7 @@ import { Colors } from '../constants/Colors';
 import CourtAdminDashboard from '../screens/courtAdmin/CourtAdminDashboard';
 import BookingApprovalScreen from '../screens/courtAdmin/BookingApprovalScreen';
 import CourtManagementScreen from '../screens/courtAdmin/CourtManagementScreen';
-import AdminReportsScreen from '../screens/courtAdmin/AdminReportsScreen';
+import AdminReportsScreen from '../screens/courtAdmin/AdminReportScreen';
 import ProfileScreen from '../screens/app/ProfileScreen';
 
 // SINGLE DECLARATION - Fix for redeclaration errors  
