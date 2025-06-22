@@ -112,22 +112,45 @@ const getStatusColor = (booking) => {
   }
 };
 
-  const getStatusText = (status, date, timeSlot) => {
-    if (status === 'cancelled') return 'CANCELLED';
-    
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    const currentTime = now.getHours() * 100 + now.getMinutes();
-    const bookingTime = parseInt(timeSlot.replace(':', ''));
-    
-    if (date < today || (date === today && bookingTime < currentTime)) {
-      return 'COMPLETED';
-    } else if (date === today) {
-      return 'TODAY';
-    } else {
-      return 'UPCOMING';
-    }
-  };
+  // 🔧 REPLACE the getStatusText function with this FIXED version:
+const getStatusText = (booking) => {
+  const { status, date, timeSlot } = booking;
+  
+  // ✅ SOLUTION: Declare variables ONCE at the top
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const currentTime = now.getHours() * 100 + now.getMinutes();
+  const bookingTime = parseInt(timeSlot.replace(':', ''));
+  
+  switch (status) {
+    case 'pending':
+      return 'PENDING APPROVAL';
+      
+    case 'approved':
+      if (date < today || (date === today && bookingTime < currentTime)) {
+        return 'COMPLETED';
+      } else if (date === today) {
+        return 'TODAY';
+      } else {
+        return 'APPROVED';
+      }
+      
+    case 'rejected':
+      return 'REJECTED';
+      
+    case 'cancelled':
+      return 'CANCELLED';
+      
+    default:
+      if (date < today || (date === today && bookingTime < currentTime)) {
+        return 'COMPLETED';
+      } else if (date === today) {
+        return 'TODAY';
+      } else {
+        return 'UPCOMING';
+      }
+  }
+};
 
   const canCancelBooking = (booking) => {
     if (booking.status === 'cancelled') return false;
