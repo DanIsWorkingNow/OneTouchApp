@@ -327,6 +327,9 @@ export default function MyBookingsScreen({ navigation }) {
         style={styles.fab}
         onPress={() => navigation.navigate('Courts')}
         label="Book Court"
+        textColor="white"
+  iconColor="white"
+  labelStyle={{ color: 'white', fontWeight: 'bold' }}
       />
 
       {/* Booking Details Modal */}
@@ -529,13 +532,25 @@ statusText: {
     textAlign: 'center',
     opacity: 0.7,
   },
+   // Replace your existing fab style with this:
   fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
-    backgroundColor: Colors.primary,
+  position: 'absolute',
+  margin: 16,
+  right: 0,
+  bottom: 0,
+  backgroundColor: '#ffffff',
+  borderRadius: 20,
+  elevation: 12,               // Higher elevation for more dramatic shadow
+  shadowColor: '#000',
+  shadowOffset: {
+    width: 0,
+    height: 6,
   },
+  shadowOpacity: 0.15,
+  shadowRadius: 8,
+  borderWidth: 0.5,            // Very subtle border
+  borderColor: '#f0f0f0',
+},
   modalContent: {
     backgroundColor: 'white',
     padding: 20,

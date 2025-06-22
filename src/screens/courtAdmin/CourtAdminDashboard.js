@@ -73,15 +73,15 @@ export default function CourtAdminDashboard({ navigation }) {
             </Text>
             <View style={styles.statsGrid}>
               <View style={styles.statItem}>
-                <Text variant="headlineMedium" style={styles.statNumber}>12</Text>
+                <Text variant="headlineMedium" style={styles.statNumber}>3</Text>
                 <Text variant="bodyMedium" style={styles.statLabel}>Pending Bookings</Text>
               </View>
               <View style={styles.statItem}>
-                <Text variant="headlineMedium" style={styles.statNumber}>8</Text>
+                <Text variant="headlineMedium" style={styles.statNumber}>2</Text>
                 <Text variant="bodyMedium" style={styles.statLabel}>Active Courts</Text>
               </View>
               <View style={styles.statItem}>
-                <Text variant="headlineMedium" style={styles.statNumber}>156</Text>
+                <Text variant="headlineMedium" style={styles.statNumber}>7</Text>
                 <Text variant="bodyMedium" style={styles.statLabel}>Total Bookings</Text>
               </View>
             </View>
