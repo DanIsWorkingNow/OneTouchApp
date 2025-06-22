@@ -13,6 +13,12 @@ import { setupDemoCourts, checkIfCourtsExist } from '../../utils/setupDemoData';
 import DatabaseSetupComponent from '../../components/DatabaseSetupComponent';
 import RoleTestComponent from '../../components/RoleTestComponent';
 import { createRolesCollection, updateAllUsersWithPermissions } from '../../utils/databaseSetup';
+import { 
+  setupCompleteDatabase, 
+  checkCollectionsStatus, 
+  setupCurrentUserBookings,
+  clearAllCollections 
+} from '../../utils/hardcodedDatabaseSetup';
 import { setupSamplePendingBookings } from '../../utils/bookingUtils';
 
 
@@ -22,12 +28,18 @@ export default function HomeScreen({ navigation }) {
   const [totalCourts, setTotalCourts] = useState(0);
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [setupLoading, setSetupLoading] = useState(false);
+const [dbStatus, setDbStatus] = useState(null);
 
   const user = auth.currentUser;
 
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  useEffect(() => {
+  checkDatabaseStatus();
+}, []);
 
   const setupRoleSystem = async () => {
   // 1. Create roles collection
