@@ -1,27 +1,25 @@
-// src/navigation/CourtAdminStack.js
+// src/navigation/CourtAdminStack.js - FIXED VERSION
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../constants/Colors';
 
-// Import your existing screens (reuse where possible)
-import ProfileScreen from '../screens/app/ProfileScreen';
-
-// Import or create court admin specific screens
-// You can create these as placeholder screens initially
+// Import screens
 import CourtAdminDashboard from '../screens/courtAdmin/CourtAdminDashboard';
 import BookingApprovalScreen from '../screens/courtAdmin/BookingApprovalScreen';
 import CourtManagementScreen from '../screens/courtAdmin/CourtManagementScreen';
 import AdminReportsScreen from '../screens/courtAdmin/AdminReportsScreen';
+import ProfileScreen from '../screens/app/ProfileScreen';
 
-const Stack = createStackNavigator();
-const Tab = createBottomTabNavigator();
+// SINGLE DECLARATION - Fix for redeclaration errors  
+const CourtStack = createStackNavigator();
+const CourtTab = createBottomTabNavigator();
 
 // Court Admin Tab Navigator
 function CourtAdminTabs() {
   return (
-    <Tab.Navigator
+    <CourtTab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
@@ -38,9 +36,6 @@ function CourtAdminTabs() {
             case 'Reports':
               iconName = 'analytics';
               break;
-            case 'Profile':
-              iconName = 'person';
-              break;
             default:
               iconName = 'home';
           }
@@ -53,51 +48,54 @@ function CourtAdminTabs() {
         headerTitleStyle: { fontWeight: 'bold' },
       })}
     >
-      <Tab.Screen 
+      <CourtTab.Screen 
         name="Dashboard" 
         component={CourtAdminDashboard}
         options={{ title: 'Court Admin' }}
       />
-      <Tab.Screen 
+      <CourtTab.Screen 
         name="Bookings" 
         component={BookingApprovalScreen}
         options={{ title: 'Approve Bookings' }}
       />
-      <Tab.Screen 
+      <CourtTab.Screen 
         name="Courts" 
         component={CourtManagementScreen}
         options={{ title: 'Manage Courts' }}
       />
-      <Tab.Screen 
+      <CourtTab.Screen 
         name="Reports" 
         component={AdminReportsScreen}
         options={{ title: 'Reports' }}
       />
-      <Tab.Screen 
-        name="Profile" 
-        component={ProfileScreen}
-        options={{ title: 'Profile' }}
-      />
-    </Tab.Navigator>
+    </CourtTab.Navigator>
   );
 }
 
 // Main Court Admin Stack Navigator
 export default function CourtAdminStack() {
   return (
-    <Stack.Navigator
+    <CourtStack.Navigator
       screenOptions={{
         headerStyle: { backgroundColor: '#1976d2' },
         headerTintColor: 'white',
         headerTitleStyle: { fontWeight: 'bold' },
       }}
     >
-      <Stack.Screen 
+      <CourtStack.Screen 
         name="CourtAdminTabs" 
         component={CourtAdminTabs}
         options={{ headerShown: false }}
       />
-      {/* Add any additional court admin screens here */}
-    </Stack.Navigator>
+      <CourtStack.Screen 
+        name="Profile" 
+        component={ProfileScreen}
+        options={{ 
+          title: 'Admin Profile',
+          headerStyle: { backgroundColor: '#1976d2' },
+          headerTintColor: 'white'
+        }}
+      />
+    </CourtStack.Navigator>
   );
 }
