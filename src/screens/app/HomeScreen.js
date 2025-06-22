@@ -52,6 +52,23 @@ const [dbStatus, setDbStatus] = useState(null);
   console.log('Role system setup complete!');
 };
   
+// Function to add bookings for current user
+  const handleAddCurrentUserBookings = async () => {
+    setSetupLoading(true);
+    try {
+      const result = await setupCurrentUserBookings();
+      if (result.success) {
+        Alert.alert('✅ Success', result.message);
+      } else {
+        Alert.alert('❌ Error', result.message);
+      }
+    } catch (error) {
+      Alert.alert('❌ Error', 'Failed to add user bookings: ' + error.message);
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
 // Function to setup sample pending bookings for testing approval feature
 const handleSetupPendingBookings = async () => {
   setSetupLoading(true);
@@ -76,6 +93,50 @@ const handleSetupPendingBookings = async () => {
     setSetupLoading(false);
   }
 };
+
+// Function to check database status
+const checkDatabaseStatus = async () => {
+  try {
+    const result = await checkCollectionsStatus();
+    if (result.success) {
+      setDbStatus(result.status);
+      console.log('📊 Database Status:', result.status);
+    }
+  } catch (error) {
+    console.error('Status check error:', error);
+  }
+};
+
+ // Function to clear all data
+  const handleClearDatabase = async () => {
+    Alert.alert(
+      '⚠️ Clear Database',
+      'This will delete ALL data in the database. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            setSetupLoading(true);
+            try {
+              const result = await clearAllCollections();
+              if (result.success) {
+                Alert.alert('✅ Cleared', result.message);
+                setDbStatus(null);
+              } else {
+                Alert.alert('❌ Error', result.error);
+              }
+            } catch (error) {
+              Alert.alert('❌ Error', error.message);
+            } finally {
+              setSetupLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
 
 // Enhanced complete database setup with pending bookings
 const handleSetupCompleteDatabase = async () => {
