@@ -123,7 +123,7 @@ export default function BookCourtScreen({ route, navigation }) {
         duration: duration,
         needOpponent: needOpponent,
         totalPrice: calculateTotalPrice(),
-        status: 'confirmed',
+        status: 'pending',
         createdAt: new Date(),
         location: courtDetails.location
       };
@@ -131,8 +131,8 @@ export default function BookCourtScreen({ route, navigation }) {
       await addDoc(collection(db, 'bookings'), bookingData);
       
       Alert.alert(
-        'Booking Confirmed!',
-        `Your court has been booked for ${selectedDate} at ${selectedTimeSlot}`,
+        '📋 Booking Submitted!',
+        `Your booking request has been submittted successfully and is pending for approval.`,
         [
           {
             text: 'OK',
