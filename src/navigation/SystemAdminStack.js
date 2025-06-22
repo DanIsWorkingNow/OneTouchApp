@@ -31,7 +31,7 @@ function SystemAdminTabs() {
               iconName = 'people';
               break;
             case 'Courts':
-              iconName = 'sports-soccer';
+              iconName = 'sports';
               break;
             case 'Logs':
               iconName = 'list';

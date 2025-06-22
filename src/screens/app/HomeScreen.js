@@ -12,7 +12,7 @@ import { Colors } from '../../constants/Colors';
 import { setupDemoCourts, checkIfCourtsExist } from '../../utils/setupDemoData';
 import DatabaseSetupComponent from '../../components/DatabaseSetupComponent';
 import RoleTestComponent from '../../components/RoleTestComponent';
-import { createRolesCollection, updateAllUsersWithPermissions } from '../utils/databaseSetup';
+import { createRolesCollection, updateAllUsersWithPermissions } from '../../utils/databaseSetup';
 
 
 export default function HomeScreen({ navigation }) {

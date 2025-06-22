@@ -24,8 +24,8 @@ function MainTabs() {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
           if (route.name === 'Home') iconName = 'home';
-          else if (route.name === 'Courts') iconName = 'sports-soccer';
-          else if (route.name === 'MyBookings') iconName = 'event';
+          else if (route.name === 'Courts') iconName = 'sports';
+          else if (route.name === 'MyBookings') iconName = 'calendar-today';
           else if (route.name === 'Profile') iconName = 'person';
           return <MaterialIcons name={iconName} size={size} color={color} />;
         },

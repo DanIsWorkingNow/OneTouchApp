@@ -28,13 +28,13 @@ function CourtAdminTabs() {
               iconName = 'dashboard';
               break;
             case 'Bookings':
-              iconName = 'event';
+              iconName = 'calendar-today';
               break;
             case 'Courts':
-              iconName = 'sports-soccer';
+              iconName = 'sports';
               break;
             case 'Reports':
-              iconName = 'analytics';
+              iconName = 'assessment';
               break;
             default:
               iconName = 'home';
