@@ -9,6 +9,7 @@ import {
   Modal, 
   Portal,
   TextInput,
+  Chip,
   FAB
 } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -338,32 +339,35 @@ export default function FeedbackManagementScreen() {
         </Card.Content>
       </Card>
 
-      {/* Filter Chips */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterContainer}
-        contentContainerStyle={styles.filterContent}
-      >
-        {['all', 'new', 'in-progress', 'resolved', 'urgent'].map((filterOption) => (
-          <Button
-            key={filterOption}
-            mode={filter === filterOption ? "contained" : "outlined"}
-            onPress={() => setFilter(filterOption)}
-            style={[
-              styles.filterButton,
-              filter === filterOption ? styles.selectedFilterButton : styles.unselectedFilterButton
-            ]}
-            textColor={filter === filterOption ? "white" : "#666"}
-            buttonColor={filter === filterOption ? "#1976d2" : "transparent"}
-            compact
-          >
-            {filterOption === 'all' ? 'All' : 
-             filterOption === 'in-progress' ? 'In Progress' : 
-             filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
-          </Button>
-        ))}
-      </ScrollView>
+     {/* Filter Chips - FIXED VERSION */}
+<ScrollView 
+  horizontal 
+  showsHorizontalScrollIndicator={false}
+  style={styles.filterContainer}
+  contentContainerStyle={styles.filterContent}
+>
+  {['all', 'new', 'in-progress', 'resolved', 'urgent'].map((filterOption) => (
+    <Chip
+      key={filterOption}
+      selected={filter === filterOption}
+      onPress={() => setFilter(filterOption)}
+      style={[
+        styles.filterChip,
+        filter === filterOption && styles.selectedFilterChip
+      ]}
+      textStyle={[
+        styles.filterText,
+        filter === filterOption && styles.selectedFilterText
+      ]}
+      showSelectedOverlay={false}
+      mode={filter === filterOption ? "flat" : "outlined"}
+    >
+      {filterOption === 'all' ? 'All' : 
+       filterOption === 'in-progress' ? 'In Progress' : 
+       filterOption.charAt(0).toUpperCase() + filterOption.slice(1)}
+    </Chip>
+  ))}
+</ScrollView>
 
       {/* Feedback List */}
       <ScrollView
@@ -461,7 +465,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
 
-  // Stats Section
+  // Stats Section (improved)
   statsCard: {
     margin: 16,
     backgroundColor: Colors.surface,
@@ -472,55 +476,72 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
     color: Colors.onSurface,
-    fontSize: 16,  // ✅ Larger title
+    fontSize: 18,  // ✅ Increased from 16
   },
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    alignItems: 'center',  // ✅ Added for better alignment
   },
   statItem: {
     alignItems: 'center',
     flex: 1,
+    paddingVertical: 8,  // ✅ Added padding
   },
   statNumber: {
     fontWeight: 'bold',
     marginBottom: 4,
-    fontSize: 24,  // ✅ Larger numbers
+    fontSize: 28,  // ✅ Increased from 24
   },
   statLabel: {
     color: Colors.onSurfaceVariant,
-    fontSize: 12,  // ✅ Readable label size
+    fontSize: 14,  // ✅ Increased from 12
     textAlign: 'center',
+    fontWeight: '500',  // ✅ Added weight
   },
 
-  // Filter Section
+  // Filter Section (FIXED)
   filterContainer: {
     marginHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 12,
+    maxHeight: 50,  // ✅ Constrain height
   },
   filterContent: {
     paddingRight: 16,
+    alignItems: 'center',  // ✅ Center vertically
+    paddingVertical: 8,  // ✅ Add vertical padding
   },
   filterChip: {
     marginRight: 8,
+    height: 32,  // ✅ Fixed height for chips
+    backgroundColor: '#f5f5f5',
+    borderColor: '#e0e0e0',
+  },
+  selectedFilterChip: {
+    backgroundColor: '#1976d2',
+    borderColor: '#1976d2',
   },
   filterText: {
-    color: Colors.onSurfaceVariant,
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
   },
   selectedFilterText: {
-    color: Colors.onPrimary,
+    color: '#fff',
+    fontWeight: '600',
   },
 
-  // Feedback List
+  // Feedback List (improved)
   feedbackList: {
     flex: 1,
     paddingHorizontal: 16,
-    paddingBottom: 80,  // ✅ Space for FAB
+    paddingBottom: 80,
   },
   feedbackCard: {
-    marginBottom: 16,  // ✅ More space between cards
+    marginBottom: 16,
     backgroundColor: Colors.surface,
-    elevation: 3,  // ✅ Better shadow
+    elevation: 3,
+    borderRadius: 12,  // ✅ Added rounded corners
   },
   feedbackHeader: {
     flexDirection: 'row',
@@ -528,105 +549,79 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: 12,
   },
+  statusBadge: {
+    paddingHorizontal: 12,  // ✅ Increased padding
+    paddingVertical: 6,     // ✅ Increased padding
+    borderRadius: 16,
+    alignSelf: 'flex-start',
+  },
+  priorityBadge: {
+    paddingHorizontal: 10,  // ✅ Better padding
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  feedbackContent: {
+    marginBottom: 12,
+  },
   feedbackTitle: {
-    flex: 1,
-    marginRight: 12,  // ✅ More space from badges
-  },
-  feedbackTitleText: {
     fontWeight: 'bold',
-    color: Colors.onSurface,
+    marginBottom: 8,
     fontSize: 16,  // ✅ Larger title
-  },
-  feedbackCourt: {
-    color: Colors.onSurfaceVariant,
-    marginTop: 4,  // ✅ Better spacing
-    fontSize: 13,  // ✅ Readable size
-  },
-  feedbackBadges: {
-    flexDirection: 'column',  // ✅ Stack badges vertically for more space
-    gap: 4,
-    alignItems: 'flex-end',  // ✅ Align to right
-  },
-  severityChip: {
-    height: 24,
-    minWidth: 50,
-    borderRadius: 12,
-    elevation: 0,  // ✅ Remove shadow
-  },
-  statusChip: {
-    height: 24,
-    minWidth: 70,
-    borderRadius: 12,
-    elevation: 0,  // ✅ Remove shadow
-  },
-  chipText: {
-    fontSize: 9,  // ✅ Smaller to ensure fit
-    fontWeight: 'bold',
-    lineHeight: 10,  // ✅ Tight line height
-  },
-  
-  // Chip content styles
-  chipContentStyle: {
-    height: 24,
-    paddingHorizontal: 4,
-    minWidth: 'auto',
+    color: Colors.onSurface,
   },
   feedbackDescription: {
-    color: Colors.onSurface,
-    marginBottom: 12,
-    lineHeight: 20,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 20,  // ✅ Better line height
+    fontSize: 14,
   },
   customerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
-    backgroundColor: Colors.surfaceVariant,  // ✅ Light background
-    padding: 8,  // ✅ Padding
-    borderRadius: 6,  // ✅ Rounded corners
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
   },
   customerText: {
-    marginLeft: 6,
-    color: Colors.onSurfaceVariant,
-    fontSize: 12,  // ✅ Readable size
+    marginLeft: 8,
+    color: '#666',
+    fontSize: 13,
   },
-
-  // Admin Response Section
   adminResponseSection: {
-    marginTop: 8,
+    marginTop: 12,
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
   },
   responseDivider: {
-    marginBottom: 8,
+    marginVertical: 8,
   },
   responseLabel: {
     fontWeight: 'bold',
-    color: Colors.primary,
-    marginBottom: 4,
+    marginBottom: 8,
+    color: '#1976d2',
   },
   adminResponseText: {
     color: Colors.onSurface,
-    fontStyle: 'italic',
-    backgroundColor: Colors.surfaceVariant,
-    padding: 8,
-    borderRadius: 4,
-    marginBottom: 8,
+    lineHeight: 18,
   },
-
-  // Action Buttons
   actionButtons: {
     flexDirection: 'row',
-    gap: 10,  // ✅ More space between buttons
-    flexWrap: 'wrap',
-    marginTop: 8,  // ✅ Space from content above
+    justifyContent: 'flex-end',
+    marginTop: 12,
+    flexWrap: 'wrap',  // ✅ Allow wrapping
   },
   actionButton: {
-    flex: 1,
-    minWidth: 120,  // ✅ Minimum button width
-    height: 36,  // ✅ Consistent height
+    marginLeft: 8,
+    marginTop: 4,  // ✅ Add margin for wrapped buttons
+    minWidth: 100,  // ✅ Minimum width
   },
 
-  // Empty State
+  // Empty state (improved)
   emptyCard: {
     marginTop: 40,
+    backgroundColor: Colors.surface,
   },
   emptyContent: {
     alignItems: 'center',
@@ -635,56 +630,62 @@ const styles = StyleSheet.create({
   emptyTitle: {
     marginTop: 16,
     marginBottom: 8,
+    fontWeight: 'bold',
     color: Colors.onSurface,
   },
   emptySubtitle: {
     textAlign: 'center',
     color: Colors.onSurfaceVariant,
+    paddingHorizontal: 20,
   },
 
-  // Modal
-  modalContent: {
-    backgroundColor: Colors.surface,
-    padding: 24,
+  // Modal styles (improved)
+  modalContainer: {
+    backgroundColor: 'white',
+    padding: 24,  // ✅ Increased padding
     margin: 20,
-    borderRadius: 8,
+    borderRadius: 12,  // ✅ Rounded corners
+    maxHeight: '80%',
   },
   modalTitle: {
+    fontSize: 20,  // ✅ Larger title
     fontWeight: 'bold',
     marginBottom: 16,
     color: Colors.onSurface,
   },
-  modalFeedbackInfo: {
-    backgroundColor: Colors.surfaceVariant,
-    padding: 12,
-    borderRadius: 8,
+  modalContent: {
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+    color: Colors.onSurface,
+  },
+  modalText: {
+    fontSize: 14,
+    lineHeight: 20,
     marginBottom: 16,
-  },
-  modalFeedbackTitle: {
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  modalFeedbackDetails: {
     color: Colors.onSurfaceVariant,
   },
   responseInput: {
     marginBottom: 20,
+    fontSize: 14,
+    lineHeight: 20,
   },
-  modalActions: {
+  modalButtons: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 8,
-  },
-  modalButton: {
-    minWidth: 80,
+    gap: 12,  // ✅ Space between buttons
   },
 
-  // FAB
+  // FAB (improved)
   fab: {
     position: 'absolute',
     margin: 16,
     right: 0,
     bottom: 0,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#1976d2',
+    elevation: 8,  // ✅ Higher elevation
   },
 });
