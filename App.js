@@ -24,6 +24,7 @@ import HomeScreen from './src/screens/app/HomeScreen';
 import CourtsScreen from './src/screens/app/CourtsScreen';
 import BookCourtScreen from './src/screens/app/BookCourtScreen';
 import MyBookingsScreen from './src/screens/app/MyBookingsScreen';
+import NotificationsScreen from './src/screens/app/NotificationsScreen';
 import ProfileScreen from './src/screens/app/ProfileScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
@@ -61,6 +62,7 @@ function MainTabs() {
           if (route.name === 'Home') iconName = 'home';
           else if (route.name === 'Courts') iconName = 'sports';
           else if (route.name === 'MyBookings') iconName = 'calendar-today';
+          else if (route.name === 'Notifications') iconName = 'notifications';
           else if (route.name === 'Profile') iconName = 'person';
           return <MaterialIcons name={iconName} size={size} color={color} />;
         },
@@ -74,6 +76,7 @@ function MainTabs() {
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'One Touch' }} />
       <Tab.Screen name="Courts" component={CourtsScreen} options={{ title: 'Available Courts' }} />
       <Tab.Screen name="MyBookings" component={MyBookingsScreen} options={{ title: 'My Bookings' }} />
+      <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profile' }} />
     </Tab.Navigator>
   );

@@ -1,6 +1,6 @@
 // src/screens/auth/RegisterScreen.js
 import React, { useState } from 'react';
-import { View, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, StyleSheet, Alert, ScrollView, Image } from 'react-native';
 import { Text, TextInput, Button, Card } from 'react-native-paper';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
@@ -61,15 +61,32 @@ export default function RegisterScreen({ navigation }) {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text variant="headlineMedium" style={styles.title}>
-            Sign Up
+      {/* ✅ LOGO SECTION */}
+      <View style={styles.logoSection}>
+        <Image 
+          source={require('../../../assets/logo.png')} // ✅ Your logo
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <Text variant="headlineLarge" style={styles.appTitle}>
+          OneTouch App
+        </Text>
+        <Text variant="bodyLarge" style={styles.appSubtitle}>
+          Join the Futsal Community
+        </Text>
+      </View>
+
+      {/* ✅ REGISTER CARD */}
+      <Card style={styles.registerCard} mode="elevated">
+        <Card.Content style={styles.cardContent}>
+          <Text variant="headlineSmall" style={styles.welcomeTitle}>
+            Create Account
           </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
-            Create your account
+          <Text variant="bodyMedium" style={styles.welcomeSubtitle}>
+            Sign up to book your futsal court
           </Text>
 
+          {/* Username Input */}
           <TextInput
             label="Username"
             value={username}
@@ -77,8 +94,16 @@ export default function RegisterScreen({ navigation }) {
             mode="outlined"
             style={styles.input}
             left={<TextInput.Icon icon="account" />}
+            theme={{
+              colors: {
+                primary: Colors.primary,           // Black focus color
+                outline: Colors.outline,           // Gray border
+                onSurfaceVariant: Colors.onSurfaceVariant, // Gray text
+              }
+            }}
           />
 
+          {/* Email Input */}
           <TextInput
             label="Email"
             value={email}
@@ -88,8 +113,16 @@ export default function RegisterScreen({ navigation }) {
             keyboardType="email-address"
             autoCapitalize="none"
             left={<TextInput.Icon icon="email" />}
+            theme={{
+              colors: {
+                primary: Colors.primary,           // Black focus color
+                outline: Colors.outline,           // Gray border
+                onSurfaceVariant: Colors.onSurfaceVariant, // Gray text
+              }
+            }}
           />
 
+          {/* Password Input */}
           <TextInput
             label="Password"
             value={password}
@@ -98,8 +131,16 @@ export default function RegisterScreen({ navigation }) {
             style={styles.input}
             secureTextEntry
             left={<TextInput.Icon icon="lock" />}
+            theme={{
+              colors: {
+                primary: Colors.primary,           // Black focus color
+                outline: Colors.outline,           // Gray border
+                onSurfaceVariant: Colors.onSurfaceVariant, // Gray text
+              }
+            }}
           />
 
+          {/* Confirm Password Input */}
           <TextInput
             label="Confirm Password"
             value={confirmPassword}
@@ -108,25 +149,43 @@ export default function RegisterScreen({ navigation }) {
             style={styles.input}
             secureTextEntry
             left={<TextInput.Icon icon="lock-check" />}
+            theme={{
+              colors: {
+                primary: Colors.primary,           // Black focus color
+                outline: Colors.outline,           // Gray border
+                onSurfaceVariant: Colors.onSurfaceVariant, // Gray text
+              }
+            }}
           />
 
+          {/* Register Button */}
           <Button
             mode="contained"
             onPress={handleRegister}
             loading={loading}
-            style={styles.button}
             disabled={loading}
+            style={styles.registerButton}
+            buttonColor={Colors.primary}         // Black button
+            textColor={Colors.onPrimary}         // White text
+            contentStyle={styles.buttonContent}
           >
             Sign Up
           </Button>
 
-          <Button
-            mode="text"
-            onPress={() => navigation.navigate('Login')}
-            style={styles.linkButton}
-          >
-            Already have an account? Login
-          </Button>
+          {/* Login Link */}
+          <View style={styles.loginContainer}>
+            <Text variant="bodyMedium" style={styles.loginText}>
+              Already have an account?{' '}
+            </Text>
+            <Button
+              mode="text"
+              onPress={() => navigation.navigate('Login')}
+              textColor={Colors.primary}         // Black text
+              style={styles.loginButton}
+            >
+              Login
+            </Button>
+          </View>
         </Card.Content>
       </Card>
     </ScrollView>
@@ -136,32 +195,82 @@ export default function RegisterScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    justifyContent: 'center',
-    backgroundColor: Colors.background,
-    padding: 20,
+    backgroundColor: Colors.background,     // Light gray background
+    paddingHorizontal: 20,
+    paddingVertical: 20,
   },
-  card: {
-    elevation: 4,
-  },
-  title: {
-    textAlign: 'center',
-    marginBottom: 10,
-    color: Colors.primary,
-  },
-  subtitle: {
-    textAlign: 'center',
+  
+  // ✅ LOGO SECTION STYLES
+  logoSection: {
+    alignItems: 'center',
+    marginTop: 20,
     marginBottom: 30,
-    color: Colors.onBackground,
   },
+  logo: {
+    width: 100,
+    height: 100,
+    marginBottom: 16,
+  },
+  appTitle: {
+    fontWeight: 'bold',
+    color: Colors.primary,                  // Black title
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  appSubtitle: {
+    color: Colors.onSurfaceVariant,         // Gray subtitle
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+
+  // ✅ REGISTER CARD STYLES  
+  registerCard: {
+    elevation: 8,
+    borderRadius: 16,
+    backgroundColor: Colors.surface,        // White card
+  },
+  cardContent: {
+    padding: 24,
+  },
+  welcomeTitle: {
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+    color: Colors.onSurface,               // Black title
+  },
+  welcomeSubtitle: {
+    textAlign: 'center',
+    marginBottom: 32,
+    color: Colors.onSurfaceVariant,        // Gray subtitle
+  },
+
+  // ✅ INPUT STYLES
   input: {
-    marginBottom: 15,
+    marginBottom: 16,
+    backgroundColor: Colors.surface,        // White input background
   },
-  button: {
-    marginTop: 10,
-    marginBottom: 10,
+
+  // ✅ BUTTON STYLES
+  registerButton: {
+    marginTop: 8,
+    marginBottom: 24,
+    borderRadius: 8,
+    elevation: 3,
+  },
+  buttonContent: {
     paddingVertical: 8,
   },
-  linkButton: {
-    marginTop: 10,
+
+  // ✅ LOGIN SECTION
+  loginContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loginText: {
+    color: Colors.onSurfaceVariant,        // Gray text
+  },
+  loginButton: {
+    marginLeft: -8,
   },
 });
