@@ -192,27 +192,14 @@ export default function FeedbackManagementScreen() {
             </Text>
           </View>
           <View style={styles.feedbackBadges}>
-            <Button
-              mode="contained"
-              style={[styles.severityChip, { backgroundColor: getSeverityColor(item.severity) }]}
-              textColor="white"
-              compact
-              labelStyle={styles.chipText}
-              contentStyle={styles.chipContentStyle}
-            >
-              {item.severity.toUpperCase()}
-            </Button>
-            <Button
-              mode="contained"
-              style={[styles.statusChip, { backgroundColor: getStatusColor(item.status) }]}
-              textColor="white"
-              compact
-              labelStyle={styles.chipText}
-              contentStyle={styles.chipContentStyle}
-            >
-              {item.status.toUpperCase().replace('-', ' ')}
-            </Button>
-          </View>
+  <View style={[styles.severityBadge, { backgroundColor: getSeverityColor(item.severity) }]}>
+    <Text style={styles.badgeText}>{item.severity.toUpperCase()}</Text>
+  </View>
+  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+    <Text style={styles.badgeText}>{item.status.toUpperCase().replace('-', ' ')}</Text>
+  </View>
+</View>
+
         </View>
 
         {/* Description */}
@@ -616,6 +603,65 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginTop: 4,  // ✅ Add margin for wrapped buttons
     minWidth: 100,  // ✅ Minimum width
+  },
+
+  //Feedback Badges
+   feedbackBadges: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: 4,  // Small gap between badges
+  },
+  
+  severityBadge: {
+    paddingHorizontal: 8,     // ✅ Reduced from 12
+    paddingVertical: 3,       // ✅ Reduced from 6
+    borderRadius: 6,          // ✅ Reduced from 16 (much less curve)
+    alignSelf: 'flex-start',
+    minWidth: 50,             // ✅ Consistent minimum width
+    alignItems: 'center',
+  },
+  
+  statusBadge: {
+    paddingHorizontal: 8,     // ✅ Reduced from 10
+    paddingVertical: 3,       // ✅ Reduced from 4
+    borderRadius: 6,          // ✅ Reduced from 12 (much less curve)
+    alignSelf: 'flex-start',
+    minWidth: 70,             // ✅ Slightly wider for status text
+    alignItems: 'center',
+  },
+
+  badgeText: {
+    color: 'white',
+    fontSize: 10,             // ✅ Smaller font size
+    fontWeight: '600',        // ✅ Semi-bold for clarity
+    letterSpacing: 0.3,       // ✅ Slight letter spacing for readability
+    textAlign: 'center',
+  },
+
+  // ✅ IMPROVED FEEDBACK HEADER LAYOUT
+  feedbackHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+
+  feedbackTitle: {
+    flex: 1,
+    marginRight: 12,          // ✅ Space between title and badges
+  },
+
+  feedbackTitleText: {
+    fontWeight: 'bold',
+    marginBottom: 4,
+    fontSize: 16,
+    color: Colors.onSurface,
+  },
+
+  feedbackCourt: {
+    color: Colors.onSurfaceVariant,
+    fontSize: 12,
+    marginTop: 2,
   },
 
   // Empty state (improved)
