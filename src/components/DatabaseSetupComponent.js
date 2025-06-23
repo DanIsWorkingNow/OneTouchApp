@@ -178,53 +178,7 @@ export default function DatabaseSetupComponent() {
         </Card>
       )}
 
-      {/* Setup Actions */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text variant="titleLarge" style={styles.sectionTitle}>
-            🚀 Setup Actions
-          </Text>
-          
-          <Button
-            mode="contained"
-            onPress={handleFullSetup}
-            loading={loading}
-            disabled={loading}
-            style={[styles.button, { backgroundColor: Colors.primary }]}
-            contentStyle={styles.buttonContent}
-          >
-            🎯 Run Full Setup (Recommended)
-          </Button>
-          
-          <Divider style={styles.divider} />
-          
-          <Text variant="bodyMedium" style={styles.manualTitle}>
-            Manual Steps:
-          </Text>
-          
-          <Button
-            mode="outlined"
-            onPress={handleCreateRoles}
-            loading={loading}
-            disabled={loading}
-            style={styles.button}
-            contentStyle={styles.buttonContent}
-          >
-            1️⃣ Create Roles Collection
-          </Button>
-          
-          <Button
-            mode="outlined"
-            onPress={handleUpdateUsers}
-            loading={loading}
-            disabled={loading}
-            style={styles.button}
-            contentStyle={styles.buttonContent}
-          >
-            2️⃣ Update Existing Users
-          </Button>
-        </Card.Content>
-      </Card>
+     
 
       {/* Create System Admin */}
       <Card style={styles.card}>
@@ -261,27 +215,7 @@ export default function DatabaseSetupComponent() {
         </Card.Content>
       </Card>
 
-      {/* Instructions */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text variant="titleLarge" style={styles.sectionTitle}>
-            📋 Instructions
-          </Text>
-          
-          <Text variant="bodyMedium" style={styles.instruction}>
-            1. Click "Run Full Setup" to automatically create roles and update users
-          </Text>
-          <Text variant="bodyMedium" style={styles.instruction}>
-            2. Create a system admin using an existing user's email
-          </Text>
-          <Text variant="bodyMedium" style={styles.instruction}>
-            3. Test the system by logging in with different roles
-          </Text>
-          <Text variant="bodyMedium" style={styles.instruction}>
-            4. Remove this component after setup is complete
-          </Text>
-        </Card.Content>
-      </Card>
+    
 
       <View style={styles.bottomPadding} />
     </ScrollView>

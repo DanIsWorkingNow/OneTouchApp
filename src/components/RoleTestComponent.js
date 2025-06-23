@@ -64,42 +64,7 @@ export default function RoleTestComponent() {
         </Card.Content>
       </Card>
 
-      {/* Role Checks Card */}
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text variant="titleLarge" style={styles.sectionTitle}>
-            🔍 Role Checks
-          </Text>
-          
-          <View style={styles.checkRow}>
-            <Text>Is System Admin:</Text>
-            <Text style={isSystemAdmin() ? styles.success : styles.error}>
-              {isSystemAdmin() ? '✅ Yes' : '❌ No'}
-            </Text>
-          </View>
-          
-          <View style={styles.checkRow}>
-            <Text>Is Court Admin:</Text>
-            <Text style={isCourtAdmin() ? styles.success : styles.error}>
-              {isCourtAdmin() ? '✅ Yes' : '❌ No'}
-            </Text>
-          </View>
-          
-          <View style={styles.checkRow}>
-            <Text>Is User:</Text>
-            <Text style={isUser() ? styles.success : styles.error}>
-              {isUser() ? '✅ Yes' : '❌ No'}
-            </Text>
-          </View>
-          
-          <View style={styles.checkRow}>
-            <Text>Is Admin Level:</Text>
-            <Text style={isAdminLevel() ? styles.success : styles.error}>
-              {isAdminLevel() ? '✅ Yes' : '❌ No'}
-            </Text>
-          </View>
-        </Card.Content>
-      </Card>
+     
 
       {/* Permissions Card */}
       <Card style={styles.card}>

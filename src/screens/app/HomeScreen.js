@@ -10,8 +10,6 @@ import { collection, query, where, getDocs, limit, orderBy } from 'firebase/fire
 import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
 import { setupDemoCourts, checkIfCourtsExist } from '../../utils/setupDemoData';
-import DatabaseSetupComponent from '../../components/DatabaseSetupComponent';
-import RoleTestComponent from '../../components/RoleTestComponent';
 import { createRolesCollection, updateAllUsersWithPermissions } from '../../utils/databaseSetup';
 import { 
   setupCompleteDatabase, 
@@ -310,17 +308,14 @@ const handleSetupCompleteDatabase = async () => {
         </Card>
 
          <ScrollView style={styles.container}>
-      <DatabaseSetupComponent />
+    
       
-      {/* TEMPORARY - Role testing */}
-      <RoleTestComponent />
-      
+     
       {/* Your existing HomeScreen content */}
     </ScrollView>
 
         <ScrollView style={styles.container}>
-      {/* TEMPORARY - Remove after setup */}
-      <DatabaseSetupComponent />
+      
       
       {/* Your existing HomeScreen content below */}
       {/* ... rest of your home screen ... */}
@@ -341,68 +336,7 @@ const handleSetupCompleteDatabase = async () => {
 
           // Add this to your JSX return statement in HomeScreen (replace the existing database setup card):
 
-{/* Enhanced Database Setup Card - Development Only */}
-<Card style={styles.setupCard}>
-  <Card.Content>
-    <Text variant="titleMedium" style={styles.setupTitle}>
-      🗄️ Database Setup (Development)
-    </Text>
-    
-    {/* Database Status */}
-    {dbStatus && (
-      <View style={styles.statusContainer}>
-        <Text style={styles.statusTitle}>📊 Current Status:</Text>
-        <Text style={styles.statusText}>
-          🏟️ Courts: {dbStatus.courts?.count || 0} documents
-        </Text>
-        <Text style={styles.statusText}>
-          👥 Users: {dbStatus.users?.count || 0} documents  
-        </Text>
-        <Text style={styles.statusText}>
-          📅 Bookings: {dbStatus.bookings?.count || 0} documents
-        </Text>
-      </View>
-    )}
-    
-    {/* Setup Buttons */}
-    <View style={styles.buttonRow}>
-      <Button 
-        mode="contained" 
-        onPress={handleSetupCompleteDatabase}
-        loading={setupLoading}
-        style={[styles.setupButton, styles.primaryButton]}
-        disabled={setupLoading}
-      >
-        🚀 Setup All Data
-      </Button>
-      
-      <Button 
-        mode="outlined" 
-        onPress={checkDatabaseStatus}
-        style={styles.setupButton}
-        disabled={setupLoading}
-      >
-        📊 Check Status
-      </Button>
-    </View>
-    
-   
-    
-    <Text style={styles.warningText}>
-      ⚠️ Remove this section before production deployment
-    </Text>
-    
-    {/* Instructions for Court Admin Testing */}
-    <View style={styles.instructionsContainer}>
-      <Text variant="bodySmall" style={styles.instructionsTitle}>
-        🧪 Testing Instructions:
-      </Text>
-      <Text variant="bodySmall" style={styles.instructionsText}>
-        1. Setup complete database with "Setup All Data"
-      </Text>
-    </View>
-  </Card.Content>
-</Card>
+
           
           <Card style={styles.statCard}>
             <Card.Content style={styles.statContent}>
@@ -474,15 +408,7 @@ const handleSetupCompleteDatabase = async () => {
           </Card>
         )}
 
-        // Create Test Pending Bookings Button
-<Button
-  mode="contained"
-  onPress={handleCreatePendingBookings}
-  style={{ margin: 10 }}
-  icon="clock-outline"
->
-  Create Test Pending Bookings
-</Button>
+    
 
         {/* Recent Bookings */}
         {recentBookings.length > 0 && (
