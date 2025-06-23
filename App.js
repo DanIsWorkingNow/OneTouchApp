@@ -61,7 +61,7 @@ function MainTabs() {
           let iconName;
           if (route.name === 'Home') iconName = 'home';
           else if (route.name === 'Courts') iconName = 'sports';
-          else if (route.name === 'MyBookings') iconName = 'calendar-today';
+          else if (route.name === 'MyBookings') iconName = 'event-note';
           else if (route.name === 'Notifications') iconName = 'notifications';
           else if (route.name === 'Profile') iconName = 'person';
           return <MaterialIcons name={iconName} size={size} color={color} />;

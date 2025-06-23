@@ -7,6 +7,7 @@ import { Colors } from '../constants/Colors';
 
 // Import screens
 import CourtAdminDashboard from '../screens/courtAdmin/CourtAdminDashboard';
+import FeedbackManagementScreen from '../screens/courtAdmin/FeedbackManagementScreen';
 import BookingApprovalScreen from '../screens/courtAdmin/BookingApprovalScreen';
 import CourtManagementScreen from '../screens/courtAdmin/CourtManagementScreen';
 import AdminReportsScreen from '../screens/courtAdmin/AdminReportScreen';
@@ -28,13 +29,16 @@ function CourtAdminTabs() {
               iconName = 'dashboard';
               break;
             case 'Bookings':
-              iconName = 'calendar-today';
+              iconName = 'event-note';
               break;
             case 'Courts':
               iconName = 'sports';
               break;
+              case 'Feedback':          // 🆕 ADD THIS CASE
+              iconName = 'rate-review';
+              break;
             case 'Reports':
-              iconName = 'assessment';
+              iconName = 'bar-chart';
               break;
             default:
               iconName = 'home';
@@ -53,6 +57,14 @@ function CourtAdminTabs() {
         component={CourtAdminDashboard}
         options={{ title: 'Court Admin' }}
       />
+<CourtTab.Screen 
+  name="Feedback" 
+  component={FeedbackManagementScreen}  // 🆕 This connects the screen
+  options={{ 
+    title: 'Court Feedback',
+    tabBarBadge: 2  // Optional: shows pending count
+  }}
+/>
       <CourtTab.Screen 
         name="Bookings" 
         component={BookingApprovalScreen}
