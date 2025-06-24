@@ -151,14 +151,7 @@ export default function CourtsScreen({ navigation }) {
       </Card.Content>
       
       <Card.Actions style={styles.cardActions}>
-        <Button
-          mode="outlined"
-          onPress={() => {/* Add court details if needed */}}
-          style={styles.detailsButton}
-          compact
-        >
-          Details
-        </Button>
+       
         <Button 
           mode="contained" 
           onPress={() => handleBookCourt(court)}

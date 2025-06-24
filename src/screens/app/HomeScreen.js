@@ -1,4 +1,4 @@
-// src/screens/app/HomeScreen.js - IMPROVED VERSION
+// src/screens/app/HomeScreen.js - INDEX ERROR FIX
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { 
@@ -29,6 +29,11 @@ export default function HomeScreen({ navigation }) {
   const [totalCourtsCount, setTotalCourtsCount] = useState(0);
   const [userBookingsCount, setUserBookingsCount] = useState(0);
   
+  // NEW: Feedback state management
+  const [userFeedbackCount, setUserFeedbackCount] = useState(0);
+  const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
+  const [recentFeedback, setRecentFeedback] = useState([]);
+  
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [setupLoading, setSetupLoading] = useState(false);
@@ -36,6 +41,9 @@ export default function HomeScreen({ navigation }) {
   
   // IMPROVED: Loading states for better UX
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  
+  // NEW: Index error handling
+  const [feedbackIndexError, setFeedbackIndexError] = useState(false);
 
   const user = auth.currentUser;
 
@@ -49,15 +57,13 @@ export default function HomeScreen({ navigation }) {
     checkDatabaseStatus();
   }, []);
 
-  // IMPROVED: Real-time listeners for live data updates
+  // FIXED: Real-time listeners with index error handling
   const setupRealtimeListeners = () => {
     console.log('🔄 Setting up real-time listeners...');
     setDashboardLoading(true);
 
     // 1. Real-time Available Courts Count
     const courtsRef = collection(db, 'courts');
-    const availableCourtsQuery = query(courtsRef, where('status', '==', 'available'));
-    
     const unsubscribeCourts = onSnapshot(courtsRef, (snapshot) => {
       const totalCourts = snapshot.size;
       const availableCourts = snapshot.docs.filter(doc => 
@@ -92,15 +98,250 @@ export default function HomeScreen({ navigation }) {
       setUserBookingsCount(allUserBookings.length);
       
       console.log(`📅 User bookings updated: ${allUserBookings.length} total, ${recentBookings.length} recent`);
-      setDashboardLoading(false);
     });
+
+    // 3. FIXED: Feedback listener with error handling
+    const setupFeedbackListener = () => {
+      try {
+        const feedbackRef = collection(db, 'feedback');
+        
+        // FIXED: Try with orderBy first, fallback if index doesn't exist
+        const userFeedbackQuery = query(
+          feedbackRef,
+          where('userId', '==', user.uid),
+          orderBy('createdAt', 'desc')
+        );
+
+        const unsubscribeFeedback = onSnapshot(
+          userFeedbackQuery, 
+          (snapshot) => {
+            const allUserFeedback = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+
+            // Get recent feedback (last 3)
+            const recentFeedback = allUserFeedback.slice(0, 3);
+            setRecentFeedback(recentFeedback);
+            
+            // Count total and pending feedback
+            setUserFeedbackCount(allUserFeedback.length);
+            const pendingCount = allUserFeedback.filter(f => 
+              f.status === 'new' || f.status === 'in-progress'
+            ).length;
+            setPendingFeedbackCount(pendingCount);
+            
+            console.log(`💬 User feedback updated: ${allUserFeedback.length} total, ${pendingCount} pending`);
+            setDashboardLoading(false);
+            setFeedbackIndexError(false);
+          },
+          (error) => {
+            console.error('❌ Feedback listener error:', error);
+            if (error.code === 'failed-precondition') {
+              console.log('📝 Index required for feedback query, falling back to simple query');
+              setFeedbackIndexError(true);
+              setupFallbackFeedbackListener();
+            } else {
+              setDashboardLoading(false);
+            }
+          }
+        );
+
+        return unsubscribeFeedback;
+      } catch (error) {
+        console.error('❌ Error setting up feedback listener:', error);
+        setFeedbackIndexError(true);
+        setupFallbackFeedbackListener();
+        return () => {};
+      }
+    };
+
+    // FALLBACK: Simple feedback query without orderBy
+    const setupFallbackFeedbackListener = () => {
+      try {
+        const feedbackRef = collection(db, 'feedback');
+        const fallbackQuery = query(feedbackRef, where('userId', '==', user.uid));
+
+        const unsubscribeFallback = onSnapshot(fallbackQuery, (snapshot) => {
+          const allUserFeedback = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+
+          // Manual sorting since we can't use orderBy
+          allUserFeedback.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt) || new Date(0);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt) || new Date(0);
+            return dateB - dateA;
+          });
+
+          const recentFeedback = allUserFeedback.slice(0, 3);
+          setRecentFeedback(recentFeedback);
+          
+          setUserFeedbackCount(allUserFeedback.length);
+          const pendingCount = allUserFeedback.filter(f => 
+            f.status === 'new' || f.status === 'in-progress'
+          ).length;
+          setPendingFeedbackCount(pendingCount);
+          
+          console.log(`💬 Feedback updated (fallback): ${allUserFeedback.length} total, ${pendingCount} pending`);
+          setDashboardLoading(false);
+        });
+
+        return unsubscribeFallback;
+      } catch (error) {
+        console.error('❌ Fallback feedback listener error:', error);
+        setDashboardLoading(false);
+        return () => {};
+      }
+    };
+
+    const unsubscribeFeedback = setupFeedbackListener();
 
     // Cleanup function
     return () => {
       console.log('🧹 Cleaning up real-time listeners');
       unsubscribeCourts();
       unsubscribeBookings();
+      if (unsubscribeFeedback) unsubscribeFeedback();
     };
+  };
+
+  // NEW: Feedback helper functions
+  const formatFeedbackTime = (feedback) => {
+    if (!feedback.createdAt) return 'Recently';
+    
+    try {
+      const date = feedback.createdAt.toDate ? feedback.createdAt.toDate() : new Date(feedback.createdAt);
+      const now = new Date();
+      const diffInHours = (now - date) / (1000 * 60 * 60);
+      
+      if (diffInHours < 1) return 'Just now';
+      if (diffInHours < 24) return `${Math.floor(diffInHours)}h ago`;
+      return date.toLocaleDateString('en-MY', { day: 'numeric', month: 'short' });
+    } catch (error) {
+      return 'Recently';
+    }
+  };
+
+  const getFeedbackStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'new': return '#FF9800';
+      case 'in-progress': return '#2196F3';
+      case 'resolved': return '#4CAF50';
+      case 'closed': return '#9E9E9E';
+      default: return '#FF9800';
+    }
+  };
+
+  const getFeedbackStatusText = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'new': return 'NEW';
+      case 'in-progress': return 'IN PROGRESS';
+      case 'resolved': return 'RESOLVED';
+      case 'closed': return 'CLOSED';
+      default: return status?.toUpperCase() || 'PENDING';
+    }
+  };
+
+  // NEW: Enhanced feedback navigation with index setup
+  const handleProvideFeedback = () => {
+    if (feedbackIndexError) {
+      Alert.alert(
+        '💬 Provide Feedback',
+        'Feedback submission is ready! However, for optimal performance, please create the required database index first.',
+        [
+          { text: 'Setup Index', onPress: handleSetupFeedbackIndex },
+          { text: 'Continue Anyway', onPress: showFeedbackComingSoon },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+    } else {
+      showFeedbackComingSoon();
+    }
+  };
+
+  const showFeedbackComingSoon = () => {
+    Alert.alert(
+      '💬 Provide Feedback',
+      'Feedback submission screen coming soon! This will allow you to report court issues, cleanliness concerns, or general feedback.',
+      [
+        { text: 'OK' },
+        { 
+          text: 'Setup Demo Feedback', 
+          onPress: handleSetupDemoFeedback 
+        }
+      ]
+    );
+  };
+
+  const handleViewMyFeedback = () => {
+    if (userFeedbackCount === 0) {
+      Alert.alert(
+        '💬 My Feedback',
+        'You haven\'t submitted any feedback yet. Use "Provide Feedback" to report court issues or share suggestions.',
+        [{ text: 'OK' }]
+      );
+    } else {
+      Alert.alert(
+        '💬 My Feedback Summary',
+        `You have submitted ${userFeedbackCount} feedback item${userFeedbackCount > 1 ? 's' : ''}.\n\n${pendingFeedbackCount > 0 ? `${pendingFeedbackCount} pending response${pendingFeedbackCount > 1 ? 's' : ''}` : 'All feedback resolved'}\n\nFull feedback history screen coming soon!`,
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  // NEW: Index setup helper
+  const handleSetupFeedbackIndex = () => {
+    Alert.alert(
+      '📋 Setup Feedback Index',
+      'To enable optimal feedback queries, please create a composite index in Firebase:\n\n1. Click the link in your browser console\n2. Or go to Firebase Console → Firestore → Indexes\n3. Create index for collection "feedback" with:\n   • userId (Ascending)\n   • createdAt (Descending)\n\nAfter creating the index, restart your app.',
+      [
+        { 
+          text: 'Open Firebase Console', 
+          onPress: () => {
+            console.log('🔗 Firebase Index URL: https://console.firebase.google.com/v1/r/project/onetouchapp-1684e/firestore/indexes?create_composite=ClJwcm9qZWN0cy9vbmV0b3VjaGFwcC0xNjg0ZS9kYXRhYmFzZXMvKGRlZmF1bHQpL2NvbGxlY3Rpb25Hcm91cHMvZmVlZGJhY2svaW5kZXhlcy9fEAEaCgoGdXNlcklkEAEaDQoJY3JlYXRlZEF0EAIaDAoIX19uYW1lX18QAg');
+            showSnackbar('📋 Index creation URL logged to console');
+          }
+        },
+        { text: 'Continue Without Index' }
+      ]
+    );
+  };
+
+  // NEW: Demo feedback setup for testing
+  const handleSetupDemoFeedback = async () => {
+    try {
+      setLoading(true);
+      
+      // Create sample feedback for current user
+      const sampleFeedback = {
+        userId: user.uid,
+        userName: user.displayName || user.email?.split('@')[0] || 'User',
+        userEmail: user.email,
+        courtId: 'demo_court_1',
+        courtName: 'Demo Court 1',
+        category: 'maintenance',
+        severity: 'medium',
+        title: 'Court lighting issue',
+        description: 'Some lights are flickering during evening hours. This affects visibility during games.',
+        status: 'new',
+        priority: 3,
+        adminResponse: '',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const { addDoc } = await import('firebase/firestore');
+      await addDoc(collection(db, 'feedback'), sampleFeedback);
+      
+      showSnackbar('✅ Demo feedback created! Check your feedback stats.');
+    } catch (error) {
+      console.error('Error creating demo feedback:', error);
+      showSnackbar('❌ Failed to create demo feedback');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // IMPROVED: Enhanced database status check
@@ -192,7 +433,104 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
+  // Enhanced complete database setup with pending bookings
+  const handleSetupCompleteDatabase = async () => {
+    setSetupLoading(true);
+    try {
+      console.log('🚀 Starting complete database setup...');
+      
+      const result = await setupCompleteDatabase(true, true);
+      
+      if (result.success) {
+        Alert.alert(
+          '🎉 Setup Complete!', 
+          result.message,
+          [{ text: 'OK', onPress: checkDatabaseStatus }]
+        );
+        // Real-time listeners will automatically update the data
+      } else {
+        Alert.alert('❌ Setup Failed', result.message || result.error);
+      }
+    } catch (error) {
+      console.error('Setup error:', error);
+      Alert.alert('❌ Error', 'Database setup failed: ' + error.message);
+    } finally {
+      setSetupLoading(false);
+    }
+  };
 
+  const handleAddCurrentUserBookings = async () => {
+    setSetupLoading(true);
+    try {
+      const result = await setupCurrentUserBookings();
+      if (result.success) {
+        Alert.alert('✅ Success', result.message);
+        // Real-time listeners will automatically update the bookings
+      } else {
+        Alert.alert('❌ Error', result.message);
+      }
+    } catch (error) {
+      Alert.alert('❌ Error', 'Failed to add user bookings: ' + error.message);
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
+  const handleClearDatabase = async () => {
+    Alert.alert(
+      '⚠️ Clear Database',
+      'This will delete ALL data in the database. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            setSetupLoading(true);
+            try {
+              const result = await clearAllCollections();
+              if (result.success) {
+                Alert.alert('✅ Cleared', result.message);
+                setDbStatus(null);
+                // Reset all counts
+                setAvailableCourtsCount(0);
+                setTotalCourtsCount(0);
+                setUserBookingsCount(0);
+                setUserFeedbackCount(0);
+                setPendingFeedbackCount(0);
+                setRecentBookings([]);
+                setRecentFeedback([]);
+              } else {
+                Alert.alert('❌ Error', result.error);
+              }
+            } catch (error) {
+              Alert.alert('❌ Error', error.message);
+            } finally {
+              setSetupLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCreatePendingBookings = async () => {
+    try {
+      console.log('🔄 Creating pending bookings...');
+      const result = await createSamplePendingBookings();
+      
+      if (result.success) {
+        Alert.alert('✅ Success', result.message);
+        console.log('✅ Pending bookings created successfully!');
+        // Real-time listeners will automatically update the bookings
+      } else {
+        Alert.alert('❌ Error', result.error || 'Failed to create pending bookings');
+      }
+    } catch (error) {
+      console.error('❌ Error creating pending bookings:', error);
+      Alert.alert('❌ Error', error.message);
+    }
+  };
 
   const showSnackbar = (message) => {
     setSnackbarMessage(message);
@@ -234,7 +572,29 @@ export default function HomeScreen({ navigation }) {
         </Card.Content>
       </Card>
 
-      {/* IMPROVED: Accurate Quick Stats */}
+      {/* Index Warning */}
+      {feedbackIndexError && (
+        <Card style={styles.warningCard}>
+          <Card.Content>
+            <Text variant="titleSmall" style={styles.warningTitle}>
+              ⚠️ Database Index Required
+            </Text>
+            <Text variant="bodySmall" style={styles.warningText}>
+              Feedback system needs a database index for optimal performance.
+            </Text>
+            <Button
+              mode="outlined"
+              onPress={handleSetupFeedbackIndex}
+              style={styles.warningButton}
+              compact
+            >
+              Setup Index
+            </Button>
+          </Card.Content>
+        </Card>
+      )}
+
+      {/* ENHANCED: Stats with Feedback integration */}
       <View style={styles.statsContainer}>
         <Card style={styles.statCard} onPress={() => navigation.navigate('Courts')}>
           <Card.Content style={styles.statContent}>
@@ -267,9 +627,26 @@ export default function HomeScreen({ navigation }) {
             )}
           </Card.Content>
         </Card>
+
+        {/* NEW: Feedback Stats Card */}
+        <Card style={styles.statCard} onPress={handleViewMyFeedback}>
+          <Card.Content style={styles.statContent}>
+            <Text variant="headlineSmall" style={styles.statNumber}>
+              {userFeedbackCount}
+            </Text>
+            <Text variant="bodySmall" style={styles.statLabel}>
+              My Feedback
+            </Text>
+            {pendingFeedbackCount > 0 && (
+              <Text variant="bodySmall" style={[styles.statSubtext, { color: Colors.primary }]}>
+                {pendingFeedbackCount} pending
+              </Text>
+            )}
+          </Card.Content>
+        </Card>
       </View>
 
-      {/* Quick Actions */}
+      {/* ENHANCED: Quick Actions with Feedback */}
       <Card style={styles.actionsCard}>
         <Card.Content>
           <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -296,6 +673,30 @@ export default function HomeScreen({ navigation }) {
               contentStyle={styles.buttonContent}
             >
               My Bookings
+            </Button>
+          </View>
+
+          {/* NEW: Feedback Actions Row */}
+          <View style={styles.actionButtons}>
+            <Button
+              mode="contained"
+              onPress={handleProvideFeedback}
+              style={[styles.primaryButton, styles.feedbackButton]}
+              buttonColor="#FF9800"
+              icon="comment-plus"
+              contentStyle={styles.buttonContent}
+            >
+              Provide Feedback
+            </Button>
+            
+            <Button
+              mode="outlined"
+              onPress={handleViewMyFeedback}
+              style={[styles.secondaryButton, styles.feedbackOutlineButton]}
+              icon="comment-text"
+              contentStyle={styles.buttonContent}
+            >
+              My Feedback {userFeedbackCount > 0 && `(${userFeedbackCount})`}
             </Button>
           </View>
         </Card.Content>
@@ -374,6 +775,53 @@ export default function HomeScreen({ navigation }) {
         </Card>
       )}
 
+      {/* NEW: Recent Feedback Display */}
+      {recentFeedback.length > 0 && (
+        <Card style={styles.feedbackCard}>
+          <Card.Content>
+            <View style={styles.sectionHeader}>
+              <Text variant="titleMedium" style={styles.sectionTitle}>
+                Recent Feedback
+              </Text>
+              <Button
+                mode="text"
+                onPress={handleViewMyFeedback}
+                compact
+              >
+                View All ({userFeedbackCount})
+              </Button>
+            </View>
+            
+            {recentFeedback.map((feedback) => (
+              <View key={feedback.id} style={styles.feedbackItem}>
+                <View style={styles.feedbackInfo}>
+                  <Text variant="bodyLarge" style={styles.feedbackTitle}>
+                    {feedback.title || 'Feedback'}
+                  </Text>
+                  <Text variant="bodySmall" style={styles.feedbackTime}>
+                    {feedback.courtName} • {formatFeedbackTime(feedback)}
+                  </Text>
+                  {feedback.adminResponse && (
+                    <Text variant="bodySmall" style={styles.adminResponseHint}>
+                      💬 Admin responded
+                    </Text>
+                  )}
+                </View>
+                <Chip
+                  mode="flat"
+                  style={[styles.statusChip, { 
+                    backgroundColor: getFeedbackStatusColor(feedback.status) 
+                  }]}
+                  textStyle={styles.statusText}
+                >
+                  {getFeedbackStatusText(feedback.status)}
+                </Chip>
+              </View>
+            ))}
+          </Card.Content>
+        </Card>
+      )}
+
       {/* App Features */}
       <Card style={styles.featuresCard}>
         <Card.Content>
@@ -395,6 +843,18 @@ export default function HomeScreen({ navigation }) {
             </View>
             
             <View style={styles.featureItem}>
+              <Text style={styles.featureIcon}>💬</Text>
+              <View>
+                <Text variant="bodyMedium" style={styles.featureTitle}>
+                  Feedback System
+                </Text>
+                <Text variant="bodySmall" style={styles.featureDesc}>
+                  Report issues and get admin responses
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.featureItem}>
               <Text style={styles.featureIcon}>🤝</Text>
               <View>
                 <Text variant="bodyMedium" style={styles.featureTitle}>
@@ -407,25 +867,13 @@ export default function HomeScreen({ navigation }) {
             </View>
             
             <View style={styles.featureItem}>
-              <Text style={styles.featureIcon}>💳</Text>
-              <View>
-                <Text variant="bodyMedium" style={styles.featureTitle}>
-                  Easy Payments
-                </Text>
-                <Text variant="bodySmall" style={styles.featureDesc}>
-                  Secure and convenient payment options
-                </Text>
-              </View>
-            </View>
-            
-            <View style={styles.featureItem}>
               <Text style={styles.featureIcon}>🔔</Text>
               <View>
                 <Text variant="bodyMedium" style={styles.featureTitle}>
                   Smart Notifications
                 </Text>
                 <Text variant="bodySmall" style={styles.featureDesc}>
-                  Get updates on bookings and matches
+                  Get updates on bookings and feedback
                 </Text>
               </View>
             </View>
@@ -433,7 +881,85 @@ export default function HomeScreen({ navigation }) {
         </Card.Content>
       </Card>
 
-    
+      {/* Database Setup Card - Development Only */}
+      <Card style={styles.setupCard}>
+        <Card.Content>
+          <Text variant="titleMedium" style={styles.setupTitle}>
+            🗄️ Database Setup (Development)
+          </Text>
+          
+          {/* Database Status */}
+          {dbStatus && (
+            <View style={styles.statusContainer}>
+              <Text style={styles.statusTitle}>📊 Current Status:</Text>
+              <Text style={styles.statusText}>
+                🏟️ Courts: {dbStatus.courts?.count || 0} documents
+              </Text>
+              <Text style={styles.statusText}>
+                👥 Users: {dbStatus.users?.count || 0} documents  
+              </Text>
+              <Text style={styles.statusText}>
+                📅 Bookings: {dbStatus.bookings?.count || 0} documents
+              </Text>
+              <Text style={styles.statusText}>
+                💬 Feedback: {dbStatus.feedback?.count || 0} documents
+              </Text>
+            </View>
+          )}
+          
+          {/* Setup Buttons */}
+          <View style={styles.buttonRow}>
+            <Button 
+              mode="contained" 
+              onPress={handleSetupCompleteDatabase}
+              loading={setupLoading}
+              style={[styles.setupButton, styles.primaryButton]}
+              disabled={setupLoading}
+            >
+              🚀 Setup All Data
+            </Button>
+            
+            <Button 
+              mode="outlined" 
+              onPress={checkDatabaseStatus}
+              style={styles.setupButton}
+              disabled={setupLoading}
+            >
+              📊 Check Status
+            </Button>
+          </View>
+          
+          <View style={styles.buttonRow}>
+            <Button 
+              mode="outlined" 
+              onPress={handleAddCurrentUserBookings}
+              loading={setupLoading}
+              style={styles.setupButton}
+              disabled={setupLoading || !auth.currentUser}
+            >
+              📅 Add My Bookings
+            </Button>
+            
+            <Button 
+              mode="outlined" 
+              onPress={handleClearDatabase}
+              style={[styles.setupButton, styles.dangerButton]}
+              disabled={setupLoading}
+            >
+              🗑️ Clear All
+            </Button>
+          </View>
+          
+          <Button 
+            mode="outlined" 
+            onPress={handleCreatePendingBookings}
+            style={styles.setupButton}
+            disabled={setupLoading}
+          >
+            ⏳ Add Pending Bookings
+          </Button>
+        </Card.Content>
+      </Card>
 
       {/* Logout Card */}
       <Card style={styles.logoutCard}>
@@ -498,19 +1024,40 @@ const styles = StyleSheet.create({
   welcomeText: {
     color: 'rgba(255,255,255,0.9)',
   },
+  // NEW: Warning card styles
+  warningCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    elevation: 2,
+    backgroundColor: '#FFF3E0',
+  },
+  warningTitle: {
+    color: '#E65100',
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  warningText: {
+    color: '#E65100',
+    marginBottom: 8,
+  },
+  warningButton: {
+    borderColor: '#E65100',
+  },
   statsContainer: {
     flexDirection: 'row',
     marginHorizontal: 16,
     marginBottom: 16,
     gap: 8,
+    flexWrap: 'wrap',
   },
   statCard: {
     flex: 1,
+    minWidth: '30%',
     elevation: 2,
   },
   statContent: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   statNumber: {
     color: Colors.primary,
@@ -520,11 +1067,12 @@ const styles = StyleSheet.create({
   statLabel: {
     color: Colors.onSurface,
     textAlign: 'center',
+    fontSize: 12,
   },
   statSubtext: {
     color: Colors.onSurface,
     opacity: 0.6,
-    fontSize: 12,
+    fontSize: 10,
     marginTop: 2,
     textAlign: 'center',
   },
@@ -541,6 +1089,7 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
+    marginBottom: 12,
   },
   primaryButton: {
     flex: 1,
@@ -549,8 +1098,15 @@ const styles = StyleSheet.create({
     flex: 1,
     borderColor: Colors.primary,
   },
+  // NEW: Feedback button styles
+  feedbackButton: {
+    backgroundColor: '#FF9800',
+  },
+  feedbackOutlineButton: {
+    borderColor: '#FF9800',
+  },
   buttonContent: {
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   demoCard: {
     marginHorizontal: 16,
@@ -614,6 +1170,39 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  // NEW: Feedback card styles
+  feedbackCard: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    elevation: 2,
+    backgroundColor: '#FFF8E1',
+  },
+  feedbackItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 152, 0, 0.1)',
+  },
+  feedbackInfo: {
+    flex: 1,
+  },
+  feedbackTitle: {
+    color: Colors.onSurface,
+    fontWeight: '500',
+  },
+  feedbackTime: {
+    color: Colors.onSurface,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  adminResponseHint: {
+    color: '#FF9800',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
   },
   featuresCard: {
     marginHorizontal: 16,
