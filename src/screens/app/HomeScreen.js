@@ -19,6 +19,7 @@ import {
 } from '../../utils/hardcodedDatabaseSetup';
 import { setupSamplePendingBookings } from '../../utils/bookingUtils';
 import { createSamplePendingBookings } from '../../utils/createPendingBookings';
+import { setupMatchmakingCollections, createSampleNotifications } from '../../utils/matchmakingSetup';
 
 export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
@@ -83,6 +84,8 @@ export default function HomeScreen({ navigation }) {
       where('userId', '==', user.uid),
       orderBy('createdAt', 'desc')
     );
+
+
 
     const unsubscribeBookings = onSnapshot(userBookingsQuery, (snapshot) => {
       const allUserBookings = snapshot.docs.map(doc => ({
@@ -155,6 +158,34 @@ export default function HomeScreen({ navigation }) {
         return () => {};
       }
     };
+
+    const setupMatchmakingFeature = async () => {
+  setSetupLoading(true);
+  try {
+    console.log('🎾 Setting up matchmaking feature...');
+    
+    // 1. Update existing bookings collection structure
+    const result = await setupMatchmakingCollections();
+    
+    if (result.success) {
+      // 2. Create sample notifications for demo
+      await createSampleNotifications(auth.currentUser);
+      
+      Alert.alert(
+        '🎉 Matchmaking Setup Complete!', 
+        'Opponent search feature is now ready!\n\n✅ Bookings collection updated\n✅ Notifications collection created\n✅ Sample data added',
+        [{ text: 'OK', onPress: checkDatabaseStatus }]
+      );
+    } else {
+      Alert.alert('❌ Setup Failed', result.message || result.error);
+    }
+  } catch (error) {
+    console.error('Matchmaking setup error:', error);
+    Alert.alert('❌ Error', 'Matchmaking setup failed: ' + error.message);
+  } finally {
+    setSetupLoading(false);
+  }
+};
 
     // FALLBACK: Simple feedback query without orderBy
     const setupFallbackFeedbackListener = () => {
@@ -928,6 +959,50 @@ const handleViewMyFeedback = () => {
             </Button>
           </View>
           
+          {/* NEW: Matchmaking Feature Setup Button */}
+<View style={styles.buttonRow}>
+  <Button 
+    mode="contained" 
+    onPress={setupMatchmakingFeature}
+    loading={setupLoading}
+    style={[styles.setupButton, { backgroundColor: '#ff6b35' }]}
+    disabled={setupLoading}
+    icon="tennis"
+  >
+    🎾 Setup Matchmaking
+  </Button>
+  
+  <Button 
+    mode="outlined" 
+    onPress={() => navigation.navigate('Notifications')}
+    style={styles.setupButton}
+    disabled={setupLoading}
+    icon="bell"
+  >
+    📬 View Notifications
+  </Button>
+</View>
+
+{/* Test Matchmaking Flow Button */}
+<View style={styles.buttonRow}>
+  <Button 
+    mode="outlined" 
+    onPress={() => navigation.navigate('Courts')}
+    style={styles.setupButton}
+    icon="court-sport"
+  >
+    🎯 Test Booking Flow
+  </Button>
+  
+  <Button 
+    mode="text" 
+    onPress={() => Alert.alert('Demo Instructions', 
+      '1. Setup Matchmaking feature\n2. Book a court with "Find Opponent = Yes"\n3. Check Notifications screen\n4. Test opponent response')}
+    style={styles.setupButton}
+  >
+    📖 Demo Guide
+  </Button>
+</View>
           <View style={styles.buttonRow}>
             <Button 
               mode="outlined" 

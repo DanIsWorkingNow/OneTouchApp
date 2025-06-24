@@ -13,7 +13,7 @@ export const setupMatchmakingCollections = async () => {
     
     // Create a sample notification to initialize the collection
     await addDoc(notificationsRef, {
-      userId: 'sample',
+      userId: 'system',
       type: 'system',
       title: 'System Ready',
       message: 'Matchmaking feature initialized',
@@ -119,61 +119,5 @@ export const createSampleNotifications = async (currentUser) => {
     
   } catch (error) {
     console.error('❌ Error creating sample notifications:', error);
-  }
-};
-
-export const testMatchmakingFlow = async (currentUser) => {
-  if (!currentUser) return { success: false, error: 'No user logged in' };
-  
-  try {
-    // Create a test booking with opponent search
-    const testBooking = {
-      userId: currentUser.uid,
-      courtId: 'test-court-1',
-      courtName: 'Test Court 1',
-      date: new Date().toLocaleDateString(),
-      timeSlot: '3:00 PM - 4:00 PM',
-      needOpponent: true,
-      searchingForOpponent: true,
-      opponentFound: false,
-      matchedWithUserId: null,
-      matchedWithUserName: null,
-      status: 'pending',
-      totalAmount: 50.00,
-      createdAt: new Date()
-    };
-    
-    const bookingRef = await addDoc(collection(db, 'bookings'), testBooking);
-    
-    // Simulate notifying other users (in real implementation, this would get all users)
-    const testNotification = {
-      userId: currentUser.uid, // In real app, this would be other users
-      type: 'opponent_search',
-      title: '🎾 Looking for Opponent!',
-      message: `${currentUser.displayName || currentUser.email} is looking for a playing partner`,
-      searchingUserId: currentUser.uid,
-      searchingUserName: currentUser.displayName || currentUser.email,
-      courtName: testBooking.courtName,
-      date: testBooking.date,
-      timeSlot: testBooking.timeSlot,
-      read: false,
-      responded: false,
-      createdAt: new Date()
-    };
-    
-    await addDoc(collection(db, 'notifications'), testNotification);
-    
-    return {
-      success: true,
-      bookingId: bookingRef.id,
-      message: 'Test booking created with opponent search!'
-    };
-    
-  } catch (error) {
-    console.error('❌ Error testing matchmaking flow:', error);
-    return {
-      success: false,
-      error: error.message
-    };
   }
 };

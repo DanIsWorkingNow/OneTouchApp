@@ -9,6 +9,7 @@ import { Calendar } from 'react-native-calendars';
 import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
+import { notifyUsersAboutOpponentSearch } from '../../services/matchmakingService';
 
 export default function BookCourtScreen({ route, navigation }) {
   console.log('🎾 BookCourtScreen - Route params:', route.params);
