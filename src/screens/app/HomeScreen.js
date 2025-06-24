@@ -1,4 +1,4 @@
-// src/screens/app/HomeScreen.js - INDEX ERROR FIX
+// src/screens/app/HomeScreen.js - FIXED SCOPING ISSUE
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert } from 'react-native';
 import { 
@@ -61,6 +61,49 @@ export default function HomeScreen({ navigation }) {
     checkDatabaseStatus();
   }, []);
 
+  // FIXED: Moved setupMatchmakingFeature to component level (NOT inside setupRealtimeListeners)
+  const setupMatchmakingFeature = async () => {
+    setSetupLoading(true);
+    try {
+      console.log('🎾 Setting up matchmaking feature...');
+      
+      // 1. Setup matchmaking database structure
+      const setupResult = await setupMatchmakingCollections();
+      
+      if (setupResult.success) {
+        // 2. Create sample notifications for demo
+        await createSampleNotifications(auth.currentUser);
+        
+        Alert.alert(
+          '🎉 Matchmaking Setup Complete!', 
+          setupResult.message + '\n\n📬 Sample notifications created for testing!',
+          [
+            { 
+              text: 'View Notifications', 
+              onPress: () => navigation.navigate('Notifications')
+            },
+            { 
+              text: 'OK', 
+              onPress: () => {
+                // Check database status if you have this function
+                if (typeof checkDatabaseStatus === 'function') {
+                  checkDatabaseStatus();
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('❌ Setup Failed', setupResult.error || 'Unknown error occurred');
+      }
+    } catch (error) {
+      console.error('Matchmaking setup error:', error);
+      Alert.alert('❌ Error', 'Matchmaking setup failed: ' + error.message);
+    } finally {
+      setSetupLoading(false);
+    }
+  };
+
   // FIXED: Real-time listeners with index error handling
   const setupRealtimeListeners = () => {
     console.log('🔄 Setting up real-time listeners...');
@@ -87,8 +130,6 @@ export default function HomeScreen({ navigation }) {
       where('userId', '==', user.uid),
       orderBy('createdAt', 'desc')
     );
-
-
 
     const unsubscribeBookings = onSnapshot(userBookingsQuery, (snapshot) => {
       const allUserBookings = snapshot.docs.map(doc => ({
@@ -161,48 +202,6 @@ export default function HomeScreen({ navigation }) {
         return () => {};
       }
     };
-
-    const setupMatchmakingFeature = async () => {
-  setSetupLoading(true);
-  try {
-    console.log('🎾 Setting up matchmaking feature...');
-    
-    // 1. Setup matchmaking database structure
-    const setupResult = await setupMatchmakingCollections();
-    
-    if (setupResult.success) {
-      // 2. Create sample notifications for demo
-      await createSampleNotifications(auth.currentUser);
-      
-      Alert.alert(
-        '🎉 Matchmaking Setup Complete!', 
-        setupResult.message + '\n\n📬 Sample notifications created for testing!',
-        [
-          { 
-            text: 'View Notifications', 
-            onPress: () => navigation.navigate('Notifications')
-          },
-          { 
-            text: 'OK', 
-            onPress: () => {
-              // Check database status if you have this function
-              if (typeof checkDatabaseStatus === 'function') {
-                checkDatabaseStatus();
-              }
-            }
-          }
-        ]
-      );
-    } else {
-      Alert.alert('❌ Setup Failed', setupResult.error || 'Unknown error occurred');
-    }
-  } catch (error) {
-    console.error('Matchmaking setup error:', error);
-    Alert.alert('❌ Error', 'Matchmaking setup failed: ' + error.message);
-  } finally {
-    setSetupLoading(false);
-  }
-};
 
     // FALLBACK: Simple feedback query without orderBy
     const setupFallbackFeedbackListener = () => {
@@ -293,50 +292,36 @@ export default function HomeScreen({ navigation }) {
   };
 
   // NEW: Enhanced feedback navigation with index setup
- const handleProvideFeedback = () => {
-  if (feedbackIndexError) {
-    Alert.alert(
-      '💬 Provide Feedback',
-      'Feedback submission is ready! However, for optimal performance, please create the required database index first.',
-      [
-        { text: 'Setup Index', onPress: handleSetupFeedbackIndex },
-        { text: 'Continue Anyway', onPress: () => navigation.navigate('FeedbackSubmission') },
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
-  } else {
-    navigation.navigate('FeedbackSubmission');
-  }
-};
-
-  const showFeedbackComingSoon = () => {
-    Alert.alert(
-      '💬 Provide Feedback',
-      'Feedback submission screen coming soon! This will allow you to report court issues, cleanliness concerns, or general feedback.',
-      [
-        { text: 'OK' },
-        { 
-          text: 'Setup Demo Feedback', 
-          onPress: handleSetupDemoFeedback 
-        }
-      ]
-    );
+  const handleProvideFeedback = () => {
+    if (feedbackIndexError) {
+      Alert.alert(
+        '💬 Provide Feedback',
+        'Feedback submission is ready! However, for optimal performance, please create the required database index first.',
+        [
+          { text: 'Setup Index', onPress: handleSetupFeedbackIndex },
+          { text: 'Continue Anyway', onPress: () => navigation.navigate('FeedbackSubmission') },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+    } else {
+      navigation.navigate('FeedbackSubmission');
+    }
   };
 
-const handleViewMyFeedback = () => {
-  if (userFeedbackCount === 0) {
-    Alert.alert(
-      '💬 My Feedback',
-      'You haven\'t submitted any feedback yet. Use "Provide Feedback" to report court issues or share suggestions.',
-      [
-        { text: 'Submit Feedback', onPress: () => navigation.navigate('FeedbackSubmission') },
-        { text: 'Cancel' }
-      ]
-    );
-  } else {
-    navigation.navigate('MyFeedback');
-  }
-};
+  const handleViewMyFeedback = () => {
+    if (userFeedbackCount === 0) {
+      Alert.alert(
+        '💬 My Feedback',
+        'You haven\'t submitted any feedback yet. Use "Provide Feedback" to report court issues or share suggestions.',
+        [
+          { text: 'Submit Feedback', onPress: () => navigation.navigate('FeedbackSubmission') },
+          { text: 'Cancel' }
+        ]
+      );
+    } else {
+      navigation.navigate('MyFeedback');
+    }
+  };
 
   // NEW: Index setup helper
   const handleSetupFeedbackIndex = () => {
@@ -976,50 +961,51 @@ const handleViewMyFeedback = () => {
             </Button>
           </View>
 
-          {/* NEW: Matchmaking Feature Setup Button */}
-<View style={styles.buttonRow}>
-  <Button 
-    mode="contained" 
-    onPress={setupMatchmakingFeature}
-    loading={setupLoading}
-    style={[styles.setupButton, { backgroundColor: '#ff6b35' }]}
-    disabled={setupLoading}
-    icon="tennis"
-  >
-    🎾 Setup Matchmaking
-  </Button>
-  
-  <Button 
-    mode="outlined" 
-    onPress={() => navigation.navigate('Notifications')}
-    style={styles.setupButton}
-    disabled={setupLoading}
-    icon="bell"
-  >
-    📬 View Notifications
-  </Button>
-</View>
+          {/* FIXED: Matchmaking Feature Setup Button - Now properly accessible */}
+          <View style={styles.buttonRow}>
+            <Button 
+              mode="contained" 
+              onPress={setupMatchmakingFeature}
+              loading={setupLoading}
+              style={[styles.setupButton, { backgroundColor: '#ff6b35' }]}
+              disabled={setupLoading}
+              icon="tennis"
+            >
+              🎾 Setup Matchmaking
+            </Button>
+            
+            <Button 
+              mode="outlined" 
+              onPress={() => navigation.navigate('Notifications')}
+              style={styles.setupButton}
+              disabled={setupLoading}
+              icon="bell"
+            >
+              📬 View Notifications
+            </Button>
+          </View>
 
-{/* Test Matchmaking Flow Button */}
-<View style={styles.buttonRow}>
-  <Button 
-    mode="outlined" 
-    onPress={() => navigation.navigate('Courts')}
-    style={styles.setupButton}
-    icon="court-sport"
-  >
-    🎯 Test Booking Flow
-  </Button>
-  
-  <Button 
-    mode="text" 
-    onPress={() => Alert.alert('Demo Instructions', 
-      '1. Setup Matchmaking feature\n2. Book a court with "Find Opponent = Yes"\n3. Check Notifications screen\n4. Test opponent response')}
-    style={styles.setupButton}
-  >
-    📖 Demo Guide
-  </Button>
-</View>
+          {/* Test Matchmaking Flow Button */}
+          <View style={styles.buttonRow}>
+            <Button 
+              mode="outlined" 
+              onPress={() => navigation.navigate('Courts')}
+              style={styles.setupButton}
+              icon="court-sport"
+            >
+              🎯 Test Booking Flow
+            </Button>
+            
+            <Button 
+              mode="text" 
+              onPress={() => Alert.alert('Demo Instructions', 
+                '1. Setup Matchmaking feature\n2. Book a court with "Find Opponent = Yes"\n3. Check Notifications screen\n4. Test opponent response')}
+              style={styles.setupButton}
+            >
+              📖 Demo Guide
+            </Button>
+          </View>
+          
           <View style={styles.buttonRow}>
             <Button 
               mode="outlined" 
