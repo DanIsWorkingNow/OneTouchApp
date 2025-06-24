@@ -245,21 +245,21 @@ export default function HomeScreen({ navigation }) {
   };
 
   // NEW: Enhanced feedback navigation with index setup
-  const handleProvideFeedback = () => {
-    if (feedbackIndexError) {
-      Alert.alert(
-        '💬 Provide Feedback',
-        'Feedback submission is ready! However, for optimal performance, please create the required database index first.',
-        [
-          { text: 'Setup Index', onPress: handleSetupFeedbackIndex },
-          { text: 'Continue Anyway', onPress: showFeedbackComingSoon },
-          { text: 'Cancel', style: 'cancel' }
-        ]
-      );
-    } else {
-      showFeedbackComingSoon();
-    }
-  };
+ const handleProvideFeedback = () => {
+  if (feedbackIndexError) {
+    Alert.alert(
+      '💬 Provide Feedback',
+      'Feedback submission is ready! However, for optimal performance, please create the required database index first.',
+      [
+        { text: 'Setup Index', onPress: handleSetupFeedbackIndex },
+        { text: 'Continue Anyway', onPress: () => navigation.navigate('FeedbackSubmission') },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  } else {
+    navigation.navigate('FeedbackSubmission');
+  }
+};
 
   const showFeedbackComingSoon = () => {
     Alert.alert(
@@ -275,21 +275,20 @@ export default function HomeScreen({ navigation }) {
     );
   };
 
-  const handleViewMyFeedback = () => {
-    if (userFeedbackCount === 0) {
-      Alert.alert(
-        '💬 My Feedback',
-        'You haven\'t submitted any feedback yet. Use "Provide Feedback" to report court issues or share suggestions.',
-        [{ text: 'OK' }]
-      );
-    } else {
-      Alert.alert(
-        '💬 My Feedback Summary',
-        `You have submitted ${userFeedbackCount} feedback item${userFeedbackCount > 1 ? 's' : ''}.\n\n${pendingFeedbackCount > 0 ? `${pendingFeedbackCount} pending response${pendingFeedbackCount > 1 ? 's' : ''}` : 'All feedback resolved'}\n\nFull feedback history screen coming soon!`,
-        [{ text: 'OK' }]
-      );
-    }
-  };
+const handleViewMyFeedback = () => {
+  if (userFeedbackCount === 0) {
+    Alert.alert(
+      '💬 My Feedback',
+      'You haven\'t submitted any feedback yet. Use "Provide Feedback" to report court issues or share suggestions.',
+      [
+        { text: 'Submit Feedback', onPress: () => navigation.navigate('FeedbackSubmission') },
+        { text: 'Cancel' }
+      ]
+    );
+  } else {
+    navigation.navigate('MyFeedback');
+  }
+};
 
   // NEW: Index setup helper
   const handleSetupFeedbackIndex = () => {

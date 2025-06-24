@@ -29,6 +29,11 @@ import ProfileScreen from './src/screens/app/ProfileScreen';
 import LoginScreen from './src/screens/auth/LoginScreen';
 import RegisterScreen from './src/screens/auth/RegisterScreen';
 import LoadingScreen from './src/components/LoadingScreen';
+// Add these NEW imports after your existing screen imports
+import FeedbackSubmissionScreen from './src/screens/app/FeedbackSubmissionScreen';
+import MyFeedbackScreen from './src/screens/app/MyFeedbackScreen';
+
+
 
 // Import admin navigation stacks
 import SystemAdminStack from './src/navigation/SystemAdminStack';
@@ -104,6 +109,24 @@ function UserAppStack() {
           title: `Book ${route.params?.court?.courtNumber || 'Court'}`,
           headerBackTitle: 'Courts',
         })}
+      />
+
+       {/* NEW: Feedback screens */}
+      <Stack.Screen 
+        name="FeedbackSubmission" 
+        component={FeedbackSubmissionScreen}
+        options={{
+          title: 'Submit Feedback',
+          headerBackTitle: 'Home',
+        }}
+      />
+      <Stack.Screen 
+        name="MyFeedback" 
+        component={MyFeedbackScreen}
+        options={{
+          title: 'My Feedback',
+          headerBackTitle: 'Home',
+        }}
       />
     </Stack.Navigator>
   );
