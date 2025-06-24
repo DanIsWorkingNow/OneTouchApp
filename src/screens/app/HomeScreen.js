@@ -19,7 +19,10 @@ import {
 } from '../../utils/hardcodedDatabaseSetup';
 import { setupSamplePendingBookings } from '../../utils/bookingUtils';
 import { createSamplePendingBookings } from '../../utils/createPendingBookings';
-import { setupMatchmakingCollections, createSampleNotifications } from '../../utils/matchmakingSetup';
+import { 
+  setupMatchmakingCollections, 
+  createSampleNotifications 
+} from '../../utils/matchmakingSetup';
 
 export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
@@ -164,20 +167,34 @@ export default function HomeScreen({ navigation }) {
   try {
     console.log('🎾 Setting up matchmaking feature...');
     
-    // 1. Update existing bookings collection structure
-    const result = await setupMatchmakingCollections();
+    // 1. Setup matchmaking database structure
+    const setupResult = await setupMatchmakingCollections();
     
-    if (result.success) {
+    if (setupResult.success) {
       // 2. Create sample notifications for demo
       await createSampleNotifications(auth.currentUser);
       
       Alert.alert(
         '🎉 Matchmaking Setup Complete!', 
-        'Opponent search feature is now ready!\n\n✅ Bookings collection updated\n✅ Notifications collection created\n✅ Sample data added',
-        [{ text: 'OK', onPress: checkDatabaseStatus }]
+        setupResult.message + '\n\n📬 Sample notifications created for testing!',
+        [
+          { 
+            text: 'View Notifications', 
+            onPress: () => navigation.navigate('Notifications')
+          },
+          { 
+            text: 'OK', 
+            onPress: () => {
+              // Check database status if you have this function
+              if (typeof checkDatabaseStatus === 'function') {
+                checkDatabaseStatus();
+              }
+            }
+          }
+        ]
       );
     } else {
-      Alert.alert('❌ Setup Failed', result.message || result.error);
+      Alert.alert('❌ Setup Failed', setupResult.error || 'Unknown error occurred');
     }
   } catch (error) {
     console.error('Matchmaking setup error:', error);
@@ -958,7 +975,7 @@ const handleViewMyFeedback = () => {
               📊 Check Status
             </Button>
           </View>
-          
+
           {/* NEW: Matchmaking Feature Setup Button */}
 <View style={styles.buttonRow}>
   <Button 
