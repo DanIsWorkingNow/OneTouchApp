@@ -106,49 +106,80 @@ export default function BookCourtScreen({ route, navigation }) {
   };
 
   const handleBooking = async () => {
-    if (!selectedDate || !selectedTimeSlot) {
-      Alert.alert('Missing Information', 'Please select date and time slot');
-      return;
-    }
+  if (!selectedDate || !selectedTimeSlot) {
+    Alert.alert('Missing Information', 'Please select date and time slot');
+    return;
+  }
 
-    setLoading(true);
-    try {
-      const bookingData = {
-        userId: auth.currentUser.uid,
-        userEmail: auth.currentUser.email,
-        courtId: courtId,
-        courtName: courtDetails.courtNumber,
-        facilityName: courtDetails.facilityName,
-        date: selectedDate,
-        timeSlot: selectedTimeSlot,
-        duration: duration,
-        needOpponent: needOpponent,
-        totalPrice: calculateTotalPrice(),
-        status: 'pending',
-        createdAt: new Date(),
-        location: courtDetails.location
-      };
-
-      await addDoc(collection(db, 'bookings'), bookingData);
+  setLoading(true);
+  try {
+    const bookingData = {
+      userId: auth.currentUser.uid,
+      userEmail: auth.currentUser.email,
+      courtId: courtId,
+      courtName: courtDetails.courtNumber,
+      facilityName: courtDetails.facilityName,
+      date: selectedDate,
+      timeSlot: selectedTimeSlot,
+      duration: duration,
+      needOpponent: needOpponent,
+      totalPrice: calculateTotalPrice(),
+      status: 'pending',
+      createdAt: new Date(),
+      location: courtDetails.location,
       
-      Alert.alert(
-        '📋 Booking Submitted!',
-        `Your booking request has been submittted successfully and is pending for approval.`,
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack()
-          }
-        ]
-      );
-    } catch (error) {
-      console.error('Booking error:', error);
-      Alert.alert('Booking Failed', 'Please try again later');
-    } finally {
-      setLoading(false);
-      setShowConfirmModal(false);
+      // NEW: ADD THESE MATCHMAKING FIELDS
+      searchingForOpponent: needOpponent,
+      opponentFound: false,
+      matchedWithUserId: null,
+      matchedWithUserName: null,
+    };
+
+    // Create the booking
+    const docRef = await addDoc(collection(db, 'bookings'), bookingData);
+    console.log('✅ Booking created with ID:', docRef.id);
+
+    // NEW: If looking for opponent, notify other users
+    if (needOpponent) {
+      try {
+        await notifyUsersAboutOpponentSearch(bookingData, auth.currentUser);
+        console.log('✅ Opponent search notifications sent');
+      } catch (notificationError) {
+        console.error('⚠️ Failed to send notifications:', notificationError);
+        // Don't fail the booking if notifications fail
+      }
     }
-  };
+
+    // UPDATED: Enhanced success message
+    const successTitle = needOpponent ? '🎾 Booking Submitted & Opponents Notified!' : '📋 Booking Submitted!';
+    const successMessage = needOpponent 
+      ? `Your booking request has been submitted successfully and is pending for approval.\n\nWe've also notified other players that you're looking for an opponent. Check your notifications for responses!`
+      : `Your booking request has been submitted successfully and is pending for approval.`;
+
+    Alert.alert(
+      successTitle,
+      successMessage,
+      [
+        {
+          text: needOpponent ? 'View Notifications' : 'OK',
+          onPress: () => {
+            if (needOpponent) {
+              navigation.navigate('Notifications');
+            } else {
+              navigation.goBack();
+            }
+          }
+        }
+      ]
+    );
+  } catch (error) {
+    console.error('Booking error:', error);
+    Alert.alert('Booking Failed', 'Please try again later');
+  } finally {
+    setLoading(false);
+    setShowConfirmModal(false);
+  }
+};
 
   const renderTimeSlots = () => {
     if (!selectedDate) return null;
@@ -265,25 +296,44 @@ export default function BookCourtScreen({ route, navigation }) {
           </Card>
         )}
 
-        {/* Need Opponent Switch */}
-        {selectedTimeSlot && (
-          <Card style={styles.sectionCard}>
-            <Card.Content>
-              <View style={styles.switchRow}>
-                <View style={styles.switchLabel}>
-                  <Text variant="bodyLarge">Find Opponent</Text>
-                  <Text variant="bodySmall" style={styles.switchDescription}>
-                    Let others know you're looking for a game partner
-                  </Text>
-                </View>
-                <Switch
-                  value={needOpponent}
-                  onValueChange={setNeedOpponent}
-                />
-              </View>
-            </Card.Content>
-          </Card>
-        )}
+        {/* Enhanced Opponent Search Section */}
+{selectedTimeSlot && (
+  <Card style={styles.sectionCard}>
+    <Card.Content>
+      <View style={styles.switchRow}>
+        <View style={styles.switchLabel}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            🎾 Looking for Opponent?
+          </Text>
+          <Text variant="bodySmall" style={styles.switchDescription}>
+            We'll notify other players that you're looking for a game partner
+          </Text>
+        </View>
+        <Switch
+          value={needOpponent}
+          onValueChange={setNeedOpponent}
+          color={Colors.primary}
+        />
+      </View>
+      
+      {needOpponent && (
+        <View style={styles.opponentInfo}>
+          <Text variant="bodySmall" style={styles.opponentDescription}>
+            When you book with "Find Opponent", we'll instantly notify all other users about your game. 
+            You'll receive notifications when someone wants to join!
+          </Text>
+          
+          <View style={styles.opponentFeatures}>
+            <Text style={styles.featureText}>✅ Instant notifications to all users</Text>
+            <Text style={styles.featureText}>✅ Simple one-tap response system</Text>
+            <Text style={styles.featureText}>✅ Get responses in your Notifications</Text>
+            <Text style={styles.featureText}>✅ Perfect for finding playing partners</Text>
+          </View>
+        </View>
+      )}
+    </Card.Content>
+  </Card>
+)}
 
         {/* Booking Summary */}
         {selectedDate && selectedTimeSlot && (
@@ -568,5 +618,31 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     marginHorizontal: 8,
+  },
+   // ADD these new styles:
+  opponentInfo: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  opponentDescription: {
+    color: '#666',
+    lineHeight: 18,
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  opponentFeatures: {
+    backgroundColor: '#f8f9ff',
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.primary,
+  },
+  featureText: {
+    fontSize: 13,
+    color: '#555',
+    marginBottom: 6,
+    lineHeight: 18,
   },
 });
