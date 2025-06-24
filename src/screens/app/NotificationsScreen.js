@@ -1,46 +1,41 @@
 // src/screens/app/NotificationsScreen.js
-// Complete notifications system for booking updates
+// Enhanced notifications system with BOTH court admin approval AND matchmaking features
 
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { 
   Text, Card, Button, Chip, ActivityIndicator, 
   Avatar, Divider, IconButton, Badge
 } from 'react-native-paper';
 import { 
-  collection, query, where, orderBy, getDocs, 
+  collection, query, where, orderBy, getDocs, onSnapshot,
   doc, updateDoc, deleteDoc 
 } from 'firebase/firestore';
 import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
+
+// IMPORT matchmaking service for opponent search responses
+import { respondToOpponentSearch } from '../../services/matchmakingService';
 
 export default function NotificationsScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [processingResponse, setProcessingResponse] = useState(null);
 
   useEffect(() => {
-    loadNotifications();
-  }, []);
+    const user = auth.currentUser;
+    if (!user) return;
 
-  const loadNotifications = async () => {
-    try {
-      setLoading(true);
-      const currentUser = auth.currentUser;
-      
-      if (!currentUser) {
-        setNotifications([]);
-        return;
-      }
+    // Use real-time listener for both booking updates AND matchmaking notifications
+    const notificationsQuery = query(
+      collection(db, 'notifications'),
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
 
-      const q = query(
-        collection(db, 'notifications'),
-        where('userId', '==', currentUser.uid),
-        orderBy('createdAt', 'desc')
-      );
-      
-      const snapshot = await getDocs(q);
+    const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
       const notificationsData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -53,17 +48,16 @@ export default function NotificationsScreen({ navigation }) {
       setUnreadCount(unread);
       
       console.log(`📬 Loaded ${notificationsData.length} notifications (${unread} unread)`);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    } finally {
       setLoading(false);
-    }
-  };
+    });
+
+    return unsubscribe;
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadNotifications();
-    setRefreshing(false);
+    // Real-time listener will automatically refresh
+    setTimeout(() => setRefreshing(false), 1000);
   };
 
   const markAsRead = async (notificationId) => {
@@ -73,16 +67,8 @@ export default function NotificationsScreen({ navigation }) {
         readAt: new Date()
       });
       
-      // Update local state
-      setNotifications(prev => 
-        prev.map(notif => 
-          notif.id === notificationId 
-            ? { ...notif, read: true, readAt: new Date() }
-            : notif
-        )
-      );
-      
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      // Local state update handled by real-time listener
+      console.log('✅ Notification marked as read');
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -99,12 +85,6 @@ export default function NotificationsScreen({ navigation }) {
         });
       }
       
-      // Update local state
-      setNotifications(prev => 
-        prev.map(notif => ({ ...notif, read: true, readAt: new Date() }))
-      );
-      setUnreadCount(0);
-      
       console.log('✅ All notifications marked as read');
     } catch (error) {
       console.error('Error marking all as read:', error);
@@ -114,16 +94,52 @@ export default function NotificationsScreen({ navigation }) {
   const deleteNotification = async (notificationId) => {
     try {
       await deleteDoc(doc(db, 'notifications', notificationId));
-      
-      const deletedNotif = notifications.find(n => n.id === notificationId);
-      setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
-      
-      if (deletedNotif && !deletedNotif.read) {
-        setUnreadCount(prev => Math.max(0, prev - 1));
-      }
+      console.log('✅ Notification deleted');
     } catch (error) {
       console.error('Error deleting notification:', error);
     }
+  };
+
+  // NEW: Handle opponent search responses
+  const handleOpponentResponse = async (notification) => {
+    Alert.alert(
+      '🎾 Join Game?',
+      `Do you want to play with ${notification.searchingUserName}?\n\nCourt: ${notification.courtName}\nTime: ${notification.timeSlot}`,
+      [
+        { text: 'Maybe Later', style: 'cancel' },
+        { 
+          text: 'Yes, I\'m Interested!',
+          onPress: async () => {
+            setProcessingResponse(notification.id);
+            
+            try {
+              // Use the matchmaking service
+              const result = await respondToOpponentSearch(
+                notification.id,
+                notification.searchingUserId,
+                auth.currentUser
+              );
+
+              if (result.success) {
+                Alert.alert(
+                  '🎉 Response Sent!',
+                  `We've let ${notification.searchingUserName} know you're interested. They'll receive your response!`,
+                  [{ text: 'Great!' }]
+                );
+              } else {
+                Alert.alert('❌ Error', result.error || 'Failed to send response');
+              }
+              
+            } catch (error) {
+              console.error('❌ Error responding to opponent search:', error);
+              Alert.alert('❌ Error', 'Failed to send response. Please try again.');
+            } finally {
+              setProcessingResponse(null);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleNotificationPress = async (notification) => {
@@ -135,10 +151,15 @@ export default function NotificationsScreen({ navigation }) {
     // Navigate based on notification type
     if (notification.type === 'booking_update' && notification.data?.bookingId) {
       navigation.navigate('MyBookings');
+    } else if (notification.type === 'match_response') {
+      // Could navigate to a matches screen in the future
+      Alert.alert('Match Response', 'Someone is interested in playing with you! Contact them to confirm details.');
     }
   };
 
+  // ENHANCED: Support both booking updates AND matchmaking notifications
   const getNotificationIcon = (type, status) => {
+    // Existing booking update icons
     if (type === 'booking_update') {
       switch (status) {
         case 'approved': return '✅';
@@ -147,10 +168,17 @@ export default function NotificationsScreen({ navigation }) {
         default: return '📋';
       }
     }
+    
+    // NEW: Matchmaking notification icons
+    if (type === 'opponent_search') return '🎾';
+    if (type === 'match_response') return '🤝';
+    
     return '📢';
   };
 
+  // ENHANCED: Support both booking updates AND matchmaking notifications
   const getNotificationColor = (type, status) => {
+    // Existing booking update colors
     if (type === 'booking_update') {
       switch (status) {
         case 'approved': return '#4CAF50';
@@ -159,6 +187,11 @@ export default function NotificationsScreen({ navigation }) {
         default: return '#FF9800';
       }
     }
+    
+    // NEW: Matchmaking notification colors
+    if (type === 'opponent_search') return '#FF6B35';
+    if (type === 'match_response') return '#4CAF50';
+    
     return Colors.primary;
   };
 
@@ -244,13 +277,58 @@ export default function NotificationsScreen({ navigation }) {
             />
           </View>
           
-          {/* Additional booking info if available */}
+          {/* NEW: Opponent Search Response Buttons */}
+          {notification.type === 'opponent_search' && !notification.responded && (
+            <View style={styles.actionButtons}>
+              <Button
+                mode="contained"
+                onPress={() => handleOpponentResponse(notification)}
+                style={styles.respondButton}
+                loading={processingResponse === notification.id}
+                disabled={processingResponse !== null}
+                icon="tennis"
+              >
+                I'm Interested! 🎾
+              </Button>
+              
+              <Button
+                mode="outlined"
+                onPress={() => markAsRead(notification.id)}
+                style={styles.dismissButton}
+                disabled={processingResponse !== null}
+              >
+                Not This Time
+              </Button>
+            </View>
+          )}
+
+          {/* Show response status for matchmaking */}
+          {notification.responded && notification.type === 'opponent_search' && (
+            <View style={styles.responseStatus}>
+              <Chip icon="check" style={styles.respondedChip} textStyle={styles.respondedText}>
+                You Responded
+              </Chip>
+            </View>
+          )}
+          
+          {/* EXISTING: Additional booking info for court admin approvals */}
           {notification.data && (
             <View style={styles.additionalInfo}>
               <Divider style={styles.divider} />
               <Text variant="bodySmall" style={styles.bookingInfo}>
-                📍 {notification.data.courtName} • 📅 {notification.data.date} • ⏰ {notification.data.timeSlot}
+                📍 {notification.data.courtName || notification.courtName} • 📅 {notification.data.date || notification.date} • ⏰ {notification.data.timeSlot || notification.timeSlot}
               </Text>
+            </View>
+          )}
+
+          {/* NEW: Matchmaking specific info */}
+          {(notification.type === 'opponent_search' || notification.type === 'match_response') && (
+            <View style={styles.matchDetails}>
+              {notification.type === 'match_response' && (
+                <Text variant="bodySmall" style={styles.matchInfo}>
+                  🎉 Contact {notification.respondingUserName} to confirm match details
+                </Text>
+              )}
             </View>
           )}
         </Card.Content>
@@ -308,8 +386,17 @@ export default function NotificationsScreen({ navigation }) {
               No notifications yet
             </Text>
             <Text variant="bodyMedium" style={styles.emptySubtitle}>
-              You'll receive notifications when your booking status changes
+              You'll receive notifications for booking approvals and opponent searches
             </Text>
+            
+            <Button
+              mode="outlined"
+              onPress={() => navigation.navigate('Courts')}
+              style={styles.testButton}
+              icon="tennis"
+            >
+              Book a Court to Test
+            </Button>
           </View>
         )}
       </ScrollView>
@@ -416,6 +503,39 @@ const styles = StyleSheet.create({
   deleteButton: {
     margin: 0,
   },
+  
+  // NEW: Matchmaking specific styles
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  respondButton: {
+    flex: 1,
+    backgroundColor: '#4caf50',
+  },
+  dismissButton: {
+    flex: 1,
+  },
+  responseStatus: {
+    marginTop: 8,
+  },
+  respondedChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e8f5e8',
+  },
+  respondedText: {
+    color: '#2e7d32',
+  },
+  matchDetails: {
+    marginTop: 8,
+  },
+  matchInfo: {
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  
+  // EXISTING: Court admin styles
   additionalInfo: {
     marginTop: 8,
   },
@@ -447,5 +567,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#666',
     lineHeight: 20,
+    marginBottom: 24,
+  },
+  testButton: {
+    borderColor: Colors.primary,
   },
 });
