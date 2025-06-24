@@ -1,6 +1,6 @@
-// src/screens/app/CourtsScreen.js
+// src/screens/app/CourtsScreen.js - FIXED VERSION
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
 import { Text, Card, Button, Chip, ActivityIndicator, Searchbar } from 'react-native-paper';
 import { collection, getDocs, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../constants/firebaseConfig';
@@ -18,10 +18,11 @@ export default function CourtsScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    // Filter courts based on search query
-    const filtered = courts.filter(court =>
-      court.courtNumber.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Filter courts based on search query - FIXED: Added null check
+    const filtered = courts.filter(court => {
+      const courtNumber = court.courtNumber || court.name || 'Unknown Court';
+      return courtNumber.toLowerCase().includes(searchQuery.toLowerCase());
+    });
     setFilteredCourts(filtered);
   }, [courts, searchQuery]);
 
@@ -39,10 +40,16 @@ export default function CourtsScreen({ navigation }) {
           });
         });
         
-        // Sort courts by court number
+        // FIXED: Safe sorting with null checks
         courtsData.sort((a, b) => {
-          const numA = parseInt(a.courtNumber.replace('Court ', ''));
-          const numB = parseInt(b.courtNumber.replace('Court ', ''));
+          // Get court numbers safely
+          const courtNumberA = a.courtNumber || a.name || '';
+          const courtNumberB = b.courtNumber || b.name || '';
+          
+          // Extract numbers safely
+          const numA = parseInt(courtNumberA.replace(/\D/g, '')) || 0;
+          const numB = parseInt(courtNumberB.replace(/\D/g, '')) || 0;
+          
           return numA - numB;
         });
         
@@ -64,22 +71,33 @@ export default function CourtsScreen({ navigation }) {
     loadCourts();
   };
 
+  // FIXED: Added proper error handling and null checks
   const handleBookCourt = (court) => {
-  console.log('Navigating to BookCourt with:', { courtId: court.id, court: court });
-  console.log('🔍 Navigation Debug - Court data:', court);
-  console.log('🔍 Navigation Debug - Court ID:', court.id);
-  
-  // Check if court data exists
-  if (!court || !court.id) {
-    Alert.alert('Error', 'Court data is missing');
-    return;
-  }
-  
-  navigation.navigate('BookCourt', { 
-    courtId: court.id,
-    court: court 
-  });
-};
+    console.log('🔍 Navigation Debug - Court data:', court);
+    console.log('🔍 Navigation Debug - Court ID:', court.id);
+    
+    // Check if court data exists and has required fields
+    if (!court || !court.id) {
+      Alert.alert('Error', 'Court data is missing. Please try again.');
+      return;
+    }
+    
+    // Ensure court has necessary fields for booking
+    const courtData = {
+      ...court,
+      courtNumber: court.courtNumber || court.name || `Court ${court.id}`,
+      pricePerHour: court.pricePerHour || 50,
+      facilityName: court.facilityName || 'One Touch Futsal',
+      location: court.location || 'Location not specified'
+    };
+    
+    console.log('Navigating to BookCourt with:', { courtId: court.id, court: courtData });
+    
+    navigation.navigate('BookCourt', { 
+      courtId: court.id,
+      court: courtData 
+    });
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -91,61 +109,64 @@ export default function CourtsScreen({ navigation }) {
   };
 
   const formatPrice = (price) => {
+    if (!price || isNaN(price)) return 'Price not set';
     return `RM ${price.toFixed(2)}/hour`;
   };
 
   const renderCourtCard = (court) => (
-    <Card key={court.id} style={styles.courtCard} mode="outlined">
+    <Card key={court.id} style={styles.courtCard}>
       <Card.Content>
         <View style={styles.cardHeader}>
-          <Text variant="titleLarge" style={styles.courtNumber}>
-            {court.courtNumber}
+          <Text variant="titleMedium" style={styles.courtNumber}>
+            {court.courtNumber || court.name || `Court ${court.id}`}
           </Text>
-          <Chip 
+          <Chip
             mode="flat"
-            style={[styles.statusChip, { backgroundColor: getStatusColor(court.status) }]}
+            style={[styles.statusChip, { 
+              backgroundColor: getStatusColor(court.status || 'available') 
+            }]}
             textStyle={styles.statusText}
           >
-            {court.status.toUpperCase()}
+            {(court.status || 'available').toUpperCase()}
           </Chip>
         </View>
-
-        <Text variant="titleMedium" style={styles.price}>
+        
+        <Text variant="bodyLarge" style={styles.price}>
           {formatPrice(court.pricePerHour)}
         </Text>
-
+        
         <Text variant="bodySmall" style={styles.facilityInfo}>
-          📍 One Touch Futsal, Temerloh Pahang
+          📍 {court.facilityName || 'One Touch Futsal'}
         </Text>
-
-        <Text variant="bodySmall" style={styles.slotsInfo}>
-          ⏰ Available from 6:00 AM to 10:00 PM
+        
+        <Text variant="bodySmall" style={styles.facilityInfo}>
+          🌍 {court.location || 'Location not specified'}
         </Text>
+        
+        {court.timeSlots && (
+          <Text variant="bodySmall" style={styles.slotsInfo}>
+            ⏰ {court.timeSlots.length} time slots available
+          </Text>
+        )}
       </Card.Content>
-
+      
       <Card.Actions style={styles.cardActions}>
-        <Button 
-          mode="outlined" 
-          onPress={() => navigation.navigate('CourtDetails', { 
-            courtId: court.id,
-            court: court 
-          })}
+        <Button
+          mode="outlined"
+          onPress={() => {/* Add court details if needed */}}
           style={styles.detailsButton}
+          compact
         >
           Details
         </Button>
-        // Replace the Book Now button with:
-<Button 
-  mode="contained" 
-  onPress={() => handleBookCourt(court)}
-  style={styles.bookButton}
-  buttonColor={Colors.primary} 
-  disabled={court.status !== 'available'}
->
-  {court.status === 'available' ? 'Book Now' : 'Unavailable'}
-</Button>
-
-
+        <Button 
+          mode="contained" 
+          onPress={() => handleBookCourt(court)}
+          style={styles.bookButton}
+          disabled={court.status === 'maintenance' || court.status === 'occupied'}
+        >
+          {court.status === 'available' ? 'Book Now' : 'Unavailable'}
+        </Button>
       </Card.Actions>
     </Card>
   );
@@ -164,22 +185,24 @@ export default function CourtsScreen({ navigation }) {
       {/* Facility Header */}
       <Card style={styles.facilityCard}>
         <Card.Content>
-          <Text variant="headlineSmall" style={styles.facilityName}>
+          <Text variant="titleLarge" style={styles.facilityName}>
             One Touch Futsal
           </Text>
           <Text variant="bodyMedium" style={styles.facilityLocation}>
-            📍 Temerloh, Pahang
+            Temerloh, Pahang
           </Text>
         </Card.Content>
       </Card>
 
+      {/* Search Bar */}
       <Searchbar
-        placeholder="Search courts (e.g., Court 1, Court 2)..."
+        placeholder="Search courts..."
         onChangeText={setSearchQuery}
         value={searchQuery}
         style={styles.searchBar}
       />
 
+      {/* Courts List */}
       <ScrollView 
         style={styles.scrollView}
         refreshControl={
@@ -187,11 +210,11 @@ export default function CourtsScreen({ navigation }) {
         }
       >
         <View style={styles.header}>
-          <Text variant="titleLarge" style={styles.title}>
-            Available Courts
+          <Text variant="titleMedium" style={styles.title}>
+            Available Courts ({filteredCourts.length})
           </Text>
-          <Text variant="bodyMedium" style={styles.subtitle}>
-            {filteredCourts.filter(c => c.status === 'available').length} of {filteredCourts.length} courts available
+          <Text variant="bodySmall" style={styles.subtitle}>
+            Select a court to make your booking
           </Text>
         </View>
 
