@@ -46,7 +46,7 @@ export const notifyUsersAboutOpponentSearch = async (bookingData, searchingUser)
       return addDoc(collection(db, 'notifications'), {
         userId: userData.uid,
         type: 'opponent_search',
-        title: '🎾 Looking for Opponent!',
+        title: ' Looking for Opponent!',
         message: `${searchingUser.displayName || searchingUser.email} is looking for a playing partner at ${bookingData.courtName}`,
         
         // Match data

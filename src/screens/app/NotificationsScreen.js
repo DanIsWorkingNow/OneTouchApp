@@ -103,7 +103,7 @@ export default function NotificationsScreen({ navigation }) {
   // NEW: Handle opponent search responses
   const handleOpponentResponse = async (notification) => {
     Alert.alert(
-      '🎾 Join Game?',
+      '⚽ Join Game?',
       `Do you want to play with ${notification.searchingUserName}?\n\nCourt: ${notification.courtName}\nTime: ${notification.timeSlot}`,
       [
         { text: 'Maybe Later', style: 'cancel' },
@@ -170,7 +170,7 @@ export default function NotificationsScreen({ navigation }) {
     }
     
     // NEW: Matchmaking notification icons
-    if (type === 'opponent_search') return '🎾';
+    if (type === 'opponent_search') return '⚽';
     if (type === 'match_response') return '🤝';
     
     return '📢';
@@ -286,9 +286,9 @@ export default function NotificationsScreen({ navigation }) {
                 style={styles.respondButton}
                 loading={processingResponse === notification.id}
                 disabled={processingResponse !== null}
-                icon="tennis"
+                icon="soccer"
               >
-                I'm Interested! 🎾
+                I'm Interested! ⚽
               </Button>
               
               <Button

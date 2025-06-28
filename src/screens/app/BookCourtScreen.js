@@ -1,4 +1,4 @@
-// src/screens/app/BookCourtScreen.js - OPERATIONAL HOURS ONLY (08:00 - 02:00)
+// src/screens/app/BookCourtScreen.js - WORKING VERSION WITH MATCHMAKING
 
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Alert, Platform, StyleSheet } from 'react-native';
@@ -6,6 +6,9 @@ import { Card, Text, Button, RadioButton, Chip, ActivityIndicator } from 'react-
 import { Calendar } from 'react-native-calendars';
 import { collection, addDoc, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../constants/firebaseConfig';
+
+// 🎾 Import the working matchmaking service
+import { notifyUsersAboutOpponentSearch } from '../../services/matchmakingService';
 
 const BookCourtScreen = ({ route, navigation }) => {
   const { court, courtId } = route.params;
@@ -20,7 +23,7 @@ const BookCourtScreen = ({ route, navigation }) => {
   const [bookedSlots, setBookedSlots] = useState([]);
   const [courtDetails, setCourtDetails] = useState(court);
 
-  // 🚀 OPERATIONAL HOURS ONLY: 08:00 till 02:00 next day (19 slots total)
+  // 🕐 OPERATIONAL HOURS: 08:00 till 02:00 next day (19 slots total)
   const operationalTimeSlots = [
     // Same day: 08:00 - 23:00 (16 slots)
     '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
@@ -30,7 +33,7 @@ const BookCourtScreen = ({ route, navigation }) => {
     '00:00', '01:00', '02:00'
   ];
 
-  // 🚀 DURATION OPTIONS: Maximum 18 hours (full operational period)
+  // ⏱️ DURATION OPTIONS: Maximum 18 hours (full operational period)
   const operationalDurationOptions = [
     { label: '1 Hour', value: 1, price: (courtDetails.pricePerHour || 80) * 1 },
     { label: '2 Hours', value: 2, price: (courtDetails.pricePerHour || 80) * 2 },
@@ -40,7 +43,7 @@ const BookCourtScreen = ({ route, navigation }) => {
     { label: '18 Hours (Full Operation)', value: 18, price: (courtDetails.pricePerHour || 80) * 18, highlight: true }
   ];
 
-  // 🚀 END TIME CALCULATION: For operational hours sequence
+  // 🕐 END TIME CALCULATION: For operational hours sequence
   const calculateEndTime = (timeSlot, duration) => {
     try {
       if (!timeSlot || !duration) return 'N/A';
@@ -79,7 +82,7 @@ const BookCourtScreen = ({ route, navigation }) => {
     }
   };
 
-  // 🚀 AVAILABILITY CHECK: For operational hours sequence
+  // 🔍 AVAILABILITY CHECK: For operational hours sequence
   const isSlotAvailableForDuration = (startTime, duration, selectedDate, bookedSlots) => {
     try {
       const [startHours] = startTime.split(':').map(num => parseInt(num));
@@ -159,7 +162,7 @@ const BookCourtScreen = ({ route, navigation }) => {
     }
   };
 
-  // 🚀 FIXED: Firebase query limitation - separate queries for different dates
+  // 🔧 FIXED: Firebase query for multi-day checking
   const loadBookedSlots = async (date) => {
     try {
       setLoading(true);
@@ -230,7 +233,7 @@ const BookCourtScreen = ({ route, navigation }) => {
     }
   };
 
-  // 🚀 SLOT AVAILABILITY CHECK
+  // 🔍 SLOT AVAILABILITY CHECK
   const isSlotAvailable = (slot) => {
     return isSlotAvailableForDuration(slot, duration, selectedDate, bookedSlots);
   };
@@ -241,50 +244,7 @@ const BookCourtScreen = ({ route, navigation }) => {
     return selectedOption ? selectedOption.price : 0;
   };
 
-  // 🚀 MATCHMAKING: Notify other users about opponent search
-  const notifyUsersAboutOpponentSearch = async (bookingData, searchingUser) => {
-    try {
-      console.log('🎾 Sending opponent search notifications...');
-      
-      // Get all users except the searching user
-      const usersRef = collection(db, 'users');
-      const usersSnapshot = await getDocs(usersRef);
-      
-      // Create notifications for all other users
-      const notificationPromises = usersSnapshot.docs
-        .filter(userDoc => userDoc.data().uid !== searchingUser.uid)
-        .map(userDoc => {
-          const userData = userDoc.data();
-          
-          return addDoc(collection(db, 'notifications'), {
-            userId: userData.uid,
-            type: 'opponent_search',
-            title: '🎾 Looking for Opponent!',
-            message: `${searchingUser.displayName || searchingUser.email} is looking for a playing partner at ${bookingData.courtName} on ${bookingData.date} at ${bookingData.timeSlot}`,
-            
-            // Match data
-            searchingUserId: searchingUser.uid,
-            searchingUserName: searchingUser.displayName || searchingUser.email,
-            courtName: bookingData.courtName,
-            date: bookingData.date,
-            timeSlot: bookingData.timeSlot,
-            
-            // Status
-            read: false,
-            responded: false,
-            createdAt: new Date()
-          });
-        });
-      
-      await Promise.all(notificationPromises);
-      console.log('✅ Opponent search notifications sent to all users');
-      
-    } catch (error) {
-      console.error('❌ Error sending notifications:', error);
-    }
-  };
-
-  // 🚀 ENHANCED BOOKING CREATION: Auto-confirmed with operational hours tracking
+  // 🚀 ENHANCED BOOKING CREATION: Auto-confirmed with matchmaking
   const createBooking = async () => {
     try {
       setLoading(true);
@@ -348,31 +308,44 @@ const BookCourtScreen = ({ route, navigation }) => {
 
       // Save to Firebase
       const docRef = await addDoc(collection(db, 'bookings'), bookingData);
+      console.log('📋 Booking created with ID:', docRef.id);
 
       // 🎾 MATCHMAKING: Send notifications if looking for opponent
+      let matchmakingMessage = '';
       if (needOpponent) {
-        const currentUser = auth.currentUser;
-        await notifyUsersAboutOpponentSearch(bookingData, currentUser);
+        try {
+          console.log('🎾 Sending matchmaking notifications...');
+          const currentUser = auth.currentUser;
+          
+          // Add booking ID to the data for notifications
+          const bookingDataWithId = {
+            ...bookingData,
+            bookingId: docRef.id
+          };
+          
+          await notifyUsersAboutOpponentSearch(bookingDataWithId, currentUser);
+          matchmakingMessage = '\n\n⚽Great! Other players have been notified about your search for an opponent. Check your notifications for responses!';
+          
+        } catch (notificationError) {
+          console.error('❌ Matchmaking notification error:', notificationError);
+          // Don't fail the booking if notifications fail
+          matchmakingMessage = '\n\n⚠️ Booking confirmed, but there was an issue sending opponent notifications. Please try again later.';
+        }
       }
 
       // Success message with booking details
       const endTimeDisplay = calculateEndTime(selectedTimeSlot, duration);
       const isFullOperationalHours = duration >= 18;
       
-      let successMessage = `Your ${isFullOperationalHours ? 'full operational hours ' : ''}booking has been confirmed!\n\n` +
+      Alert.alert(
+        '✅ Booking Confirmed!',
+        `Your ${isFullOperationalHours ? 'full operational hours ' : ''}booking has been confirmed!${matchmakingMessage}\n\n` +
         `Court: ${courtDetails.courtNumber}\n` +
         `Date: ${formatDate(selectedDate)}\n` +
         `Time: ${selectedTimeSlot} - ${endTimeDisplay}\n` +
         `Duration: ${duration} hour${duration > 1 ? 's' : ''}\n` +
         `Total: RM ${calculateTotal()}\n\n` +
-        `Booking ID: ${docRef.id.slice(-8)}`;
-      
-      // Add matchmaking message if searching for opponent
-      if (needOpponent) {
-        successMessage += `\n\n🎾 We've notified other players that you're looking for an opponent! Check your notifications for responses.`;
-      }
-      
-      Alert.alert('✅ Booking Confirmed!', successMessage,
+        `Booking ID: ${docRef.id.slice(-8)}`,
         [
           {
             text: 'View My Bookings',
@@ -471,50 +444,7 @@ const BookCourtScreen = ({ route, navigation }) => {
           </Card.Content>
         </Card>
 
-        {/* Opponent Search / Matchmaking */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              🎾 Find Playing Partner
-            </Text>
-            <Text variant="bodySmall" style={styles.matchmakingNote}>
-              Would you like us to notify other players that you're looking for an opponent?
-            </Text>
-            
-            <View style={styles.matchmakingContainer}>
-              <View style={styles.matchmakingOption}>
-                <View>
-                  <Text style={styles.matchmakingLabel}>Search for Opponent</Text>
-                  <Text style={styles.matchmakingDescription}>
-                    We'll notify other players about your booking
-                  </Text>
-                </View>
-                <Button
-                  mode={needOpponent ? "contained" : "outlined"}
-                  onPress={() => setNeedOpponent(!needOpponent)}
-                  style={[
-                    styles.matchmakingButton,
-                    needOpponent && styles.matchmakingButtonActive
-                  ]}
-                  compact
-                >
-                  {needOpponent ? "Yes, Find Partner!" : "No Thanks"}
-                </Button>
-              </View>
-              
-              {needOpponent && (
-                <View style={styles.matchmakingInfo}>
-                  <Text style={styles.matchmakingInfoText}>
-                    ✅ Other players will be notified when you confirm this booking
-                  </Text>
-                  <Text style={styles.matchmakingBenefit}>
-                    🎯 87% of players find it helpful to connect with opponents
-                  </Text>
-                </View>
-              )}
-            </View>
-          </Card.Content>
-        </Card>
+        {/* Duration Selection */}
         <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
@@ -563,6 +493,51 @@ const BookCourtScreen = ({ route, navigation }) => {
                 </Text>
               </View>
             )}
+          </Card.Content>
+        </Card>
+
+        {/* Opponent Search / Matchmaking */}
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              ⚽ Find Playing Partner
+            </Text>
+            <Text variant="bodySmall" style={styles.matchmakingNote}>
+              Would you like us to notify other players that you're looking for an opponent?
+            </Text>
+            
+            <View style={styles.matchmakingContainer}>
+              <View style={styles.matchmakingOption}>
+                <View>
+                  <Text style={styles.matchmakingLabel}>Search for Opponent</Text>
+                  <Text style={styles.matchmakingDescription}>
+                    We'll notify other players about your booking
+                  </Text>
+                </View>
+                <Button
+                  mode={needOpponent ? "contained" : "outlined"}
+                  onPress={() => setNeedOpponent(!needOpponent)}
+                  style={[
+                    styles.matchmakingButton,
+                    needOpponent && styles.matchmakingButtonActive
+                  ]}
+                  compact
+                >
+                  {needOpponent ? "Yes, Find Partner!" : "No Thanks"}
+                </Button>
+              </View>
+              
+              {needOpponent && (
+                <View style={styles.matchmakingInfo}>
+                  <Text style={styles.matchmakingInfoText}>
+                    ✅ Other players will be notified when you confirm this booking
+                  </Text>
+                  <Text style={styles.matchmakingBenefit}>
+                    🎯 87% of players find it helpful to connect with opponents
+                  </Text>
+                </View>
+              )}
+            </View>
           </Card.Content>
         </Card>
 
@@ -647,7 +622,7 @@ const BookCourtScreen = ({ route, navigation }) => {
                 
                 {needOpponent && (
                   <Text style={styles.matchmakingStatus}>
-                    🎾 Looking for playing partner - other players will be notified
+                    ⚽ Looking for playing partner - other players will be notified
                   </Text>
                 )}
                 
@@ -777,6 +752,67 @@ const styles = StyleSheet.create({
     color: '#333',
     fontSize: 16,
   },
+  // 🎾 MATCHMAKING STYLES
+  matchmakingNote: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  matchmakingContainer: {
+    marginTop: 8,
+  },
+  matchmakingOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  matchmakingLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  matchmakingDescription: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  matchmakingButton: {
+    minWidth: 120,
+  },
+  matchmakingButtonActive: {
+    backgroundColor: '#FF6B35',
+  },
+  matchmakingInfo: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#F0F8FF',
+    borderRadius: 8,
+    borderLeft: 4,
+    borderLeftColor: '#FF6B35',
+  },
+  matchmakingInfoText: {
+    fontSize: 12,
+    color: '#333',
+    fontWeight: '500',
+  },
+  matchmakingBenefit: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  matchmakingStatus: {
+    fontSize: 12,
+    color: '#FF6B35',
+    backgroundColor: '#FFF0E6',
+    padding: 8,
+    borderRadius: 4,
+    marginTop: 8,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
   dateText: {
     marginBottom: 8,
     color: '#666',
@@ -855,68 +891,6 @@ const styles = StyleSheet.create({
   },
   confirmButtonContent: {
     paddingVertical: 8,
-  },
-  
-  // 🎾 MATCHMAKING STYLES
-  matchmakingNote: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 12,
-    fontStyle: 'italic',
-  },
-  matchmakingContainer: {
-    marginTop: 8,
-  },
-  matchmakingOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  matchmakingLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  matchmakingDescription: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  matchmakingButton: {
-    minWidth: 120,
-  },
-  matchmakingButtonActive: {
-    backgroundColor: '#FF6B35',
-  },
-  matchmakingInfo: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#F0F8FF',
-    borderRadius: 8,
-    borderLeft: 4,
-    borderLeftColor: '#FF6B35',
-  },
-  matchmakingInfoText: {
-    fontSize: 12,
-    color: '#333',
-    fontWeight: '500',
-  },
-  matchmakingBenefit: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  matchmakingStatus: {
-    fontSize: 12,
-    color: '#FF6B35',
-    backgroundColor: '#FFF0E6',
-    padding: 8,
-    borderRadius: 4,
-    marginTop: 8,
-    textAlign: 'center',
-    fontWeight: '500',
   },
 });
 
