@@ -1,35 +1,16 @@
-// src/screens/app/BookCourtScreen.js - ANDROID FIX
+// src/screens/app/BookCourtScreen.js - OPERATIONAL HOURS ONLY (08:00 - 02:00)
+
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
-import { 
-  Text, Card, Button, Chip, RadioButton, Switch, 
-  ActivityIndicator, Portal, Modal, Divider
-} from 'react-native-paper';
+import { View, ScrollView, Alert, Platform, StyleSheet } from 'react-native';
+import { Card, Text, Button, RadioButton, Chip, ActivityIndicator } from 'react-native-paper';
 import { Calendar } from 'react-native-calendars';
-import { collection, addDoc, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../constants/firebaseConfig';
-import { Colors } from '../../constants/Colors';
-import { notifyUsersAboutOpponentSearch } from '../../services/matchmakingService';
 
-export default function BookCourtScreen({ route, navigation }) {
-  console.log('🎾 BookCourtScreen - Route params:', route.params);
-  console.log('📱 Platform:', Platform.OS);
-  
-  // Error handling for missing params
-  if (!route.params || !route.params.court) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Error: Missing court data</Text>
-        <Button mode="contained" onPress={() => navigation.goBack()}>
-          Go Back to Courts
-        </Button>
-      </View>
-    );
-  }
-
+const BookCourtScreen = ({ route, navigation }) => {
   const { court, courtId } = route.params;
   
-  // State management
+  // State variables
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('');
   const [duration, setDuration] = useState(1);
@@ -38,399 +19,525 @@ export default function BookCourtScreen({ route, navigation }) {
   const [availableSlots, setAvailableSlots] = useState([]);
   const [bookedSlots, setBookedSlots] = useState([]);
   const [courtDetails, setCourtDetails] = useState(court);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  // Load court details and check booked slots
-  useEffect(() => {
-    if (selectedDate) {
-      loadBookedSlots();
+  // 🚀 OPERATIONAL HOURS ONLY: 08:00 till 02:00 next day (19 slots total)
+  const operationalTimeSlots = [
+    // Same day: 08:00 - 23:00 (16 slots)
+    '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
+    '14:00', '15:00', '16:00', '17:00', '18:00', '19:00',
+    '20:00', '21:00', '22:00', '23:00',
+    // Next day: 00:00 - 02:00 (3 slots)
+    '00:00', '01:00', '02:00'
+  ];
+
+  // 🚀 DURATION OPTIONS: Maximum 18 hours (full operational period)
+  const operationalDurationOptions = [
+    { label: '1 Hour', value: 1, price: (courtDetails.pricePerHour || 80) * 1 },
+    { label: '2 Hours', value: 2, price: (courtDetails.pricePerHour || 80) * 2 },
+    { label: '3 Hours', value: 3, price: (courtDetails.pricePerHour || 80) * 3 },
+    { label: '6 Hours', value: 6, price: (courtDetails.pricePerHour || 80) * 6 },
+    { label: '12 Hours', value: 12, price: (courtDetails.pricePerHour || 80) * 12 },
+    { label: '18 Hours (Full Operation)', value: 18, price: (courtDetails.pricePerHour || 80) * 18, highlight: true }
+  ];
+
+  // 🚀 END TIME CALCULATION: For operational hours sequence
+  const calculateEndTime = (timeSlot, duration) => {
+    try {
+      if (!timeSlot || !duration) return 'N/A';
+      
+      const [hours, minutes] = timeSlot.split(':').map(num => parseInt(num));
+      
+      // Operational hours sequence: 8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1,2
+      const operationalHours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
+      const startIndex = operationalHours.indexOf(hours);
+      
+      if (startIndex === -1) return 'Invalid time';
+      
+      const endIndex = (startIndex + duration);
+      
+      // Check if we exceed operational hours
+      if (endIndex > operationalHours.length) {
+        return 'Exceeds operational hours';
+      }
+      
+      const finalIndex = endIndex === operationalHours.length ? 0 : endIndex % operationalHours.length;
+      const endHour = endIndex === operationalHours.length ? 2 : operationalHours[finalIndex];
+      
+      // Determine if we cross to next day (when we reach 00:00 or beyond)
+      const dayOffset = endIndex > 16 ? 1 : 0; // 16 is index of 23:00, so beyond that is next day
+      
+      const endTimeString = `${endHour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+      
+      if (dayOffset > 0) {
+        return `${endTimeString} (+1 day)`;
+      }
+      
+      return endTimeString;
+    } catch (error) {
+      console.error('Error calculating end time:', error);
+      return 'N/A';
     }
-  }, [selectedDate]);
+  };
 
+  // 🚀 AVAILABILITY CHECK: For operational hours sequence
+  const isSlotAvailableForDuration = (startTime, duration, selectedDate, bookedSlots) => {
+    try {
+      const [startHours] = startTime.split(':').map(num => parseInt(num));
+      
+      // Operational hours sequence
+      const operationalHours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
+      const startIndex = operationalHours.indexOf(startHours);
+      
+      if (startIndex === -1) return false; // Invalid start time
+      
+      // Check if duration exceeds operational hours
+      if (startIndex + duration > operationalHours.length) {
+        return false; // Cannot book beyond operational hours
+      }
+      
+      let currentDate = new Date(selectedDate);
+      
+      // Check each hour slot for the entire duration
+      for (let i = 0; i < duration; i++) {
+        const currentIndex = startIndex + i;
+        const currentHour = operationalHours[currentIndex];
+        
+        // Handle day transition when we go from 23:00 (index 15) to 00:00 (index 16)
+        if (currentIndex >= 16 && i > 0) {
+          // We're in the next day (00:00, 01:00, 02:00)
+          if (i === 1 || operationalHours[startIndex + i - 1] === 23) {
+            currentDate = new Date(selectedDate);
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+        }
+        
+        const timeSlot = `${currentHour.toString().padStart(2, '0')}:00`;
+        const dateString = currentDate.toISOString().split('T')[0];
+        
+        // Check if this specific time slot is booked
+        const isBooked = bookedSlots.some(booking => 
+          booking.date === dateString && 
+          booking.timeSlot === timeSlot
+        );
+        
+        if (isBooked) {
+          return false; // Slot not available
+        }
+      }
+      
+      return true; // All slots available
+    } catch (error) {
+      console.error('Error checking slot availability:', error);
+      return false;
+    }
+  };
+
+  // Load court details
   useEffect(() => {
     loadCourtDetails();
+    setAvailableSlots(operationalTimeSlots); // Use operational time slots only
   }, []);
+
+  // Load booked slots when date or duration changes
+  useEffect(() => {
+    if (selectedDate) {
+      loadBookedSlots(selectedDate);
+    }
+  }, [selectedDate, duration]);
 
   const loadCourtDetails = async () => {
     try {
-      console.log('📡 Loading court details for:', courtId);
-      const courtDoc = await getDoc(doc(db, 'courts', courtId));
-      if (courtDoc.exists()) {
-        const details = { id: courtDoc.id, ...courtDoc.data() };
-        setCourtDetails(details);
-        console.log('✅ Court details loaded:', details);
-      } else {
-        console.log('⚠️ No court found, using default data');
-        setCourtDetails(court);
+      const courtRef = doc(db, 'courts', courtId);
+      const courtSnap = await getDoc(courtRef);
+      
+      if (courtSnap.exists()) {
+        const courtData = { id: courtSnap.id, ...courtSnap.data() };
+        setCourtDetails(courtData);
       }
     } catch (error) {
-      console.error('❌ Error loading court details:', error);
-      setCourtDetails(court);
+      console.error('Error loading court details:', error);
     }
   };
 
-  const loadBookedSlots = async () => {
+  // 🚀 ENHANCED BOOKING SLOT LOADING: For multi-day checking
+  const loadBookedSlots = async (date) => {
     try {
-      const bookingsQuery = query(
-        collection(db, 'bookings'),
+      setLoading(true);
+      
+      // Calculate date range (check current day and next day for cross-day bookings)
+      const startDate = new Date(date);
+      const endDate = new Date(date);
+      endDate.setDate(endDate.getDate() + 1); // Check next day for early morning slots
+      
+      const bookingsRef = collection(db, 'bookings');
+      const q = query(
+        bookingsRef,
         where('courtId', '==', courtId),
-        where('date', '==', selectedDate)
+        where('date', '>=', date),
+        where('date', '<=', endDate.toISOString().split('T')[0]),
+        where('status', '!=', 'cancelled')
       );
-      const snapshot = await getDocs(bookingsQuery);
-      const slots = snapshot.docs.map(doc => doc.data().timeSlot);
-      setBookedSlots(slots);
+      
+      const querySnapshot = await getDocs(q);
+      const booked = [];
+      
+      querySnapshot.forEach((doc) => {
+        const booking = doc.data();
+        booked.push({
+          date: booking.date,
+          timeSlot: booking.timeSlot,
+          duration: booking.duration || 1,
+          status: booking.status
+        });
+      });
+      
+      setBookedSlots(booked);
     } catch (error) {
       console.error('Error loading booked slots:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getTodayString = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
-  };
-
-  const getMarkedDates = () => {
-    const marked = {};
-    if (selectedDate) {
-      marked[selectedDate] = { selected: true, selectedColor: Colors.primary };
-    }
-    return marked;
-  };
-
-  const calculateTotalPrice = () => {
-    return courtDetails.pricePerHour * duration;
-  };
-
+  // 🚀 SLOT AVAILABILITY CHECK
   const isSlotAvailable = (slot) => {
-    return !bookedSlots.includes(slot);
+    return isSlotAvailableForDuration(slot, duration, selectedDate, bookedSlots);
   };
 
-  const handleBooking = async () => {
-  if (!selectedDate || !selectedTimeSlot) {
-    Alert.alert('Missing Information', 'Please select date and time slot');
-    return;
-  }
+  // Calculate total price
+  const calculateTotal = () => {
+    const selectedOption = operationalDurationOptions.find(option => option.value === duration);
+    return selectedOption ? selectedOption.price : 0;
+  };
 
-  setLoading(true);
-  try {
-    const bookingData = {
-      userId: auth.currentUser.uid,
-      userEmail: auth.currentUser.email,
-      courtId: courtId,
-      courtName: courtDetails.courtNumber,
-      facilityName: courtDetails.facilityName,
-      date: selectedDate,
-      timeSlot: selectedTimeSlot,
-      duration: duration,
-      needOpponent: needOpponent,
-      totalPrice: calculateTotalPrice(),
-      status: 'pending',
-      createdAt: new Date(),
-      location: courtDetails.location,
-      
-      // NEW: ADD THESE MATCHMAKING FIELDS
-      searchingForOpponent: needOpponent,
-      opponentFound: false,
-      matchedWithUserId: null,
-      matchedWithUserName: null,
-    };
+  // 🚀 ENHANCED BOOKING CREATION: Auto-confirmed with operational hours tracking
+  const createBooking = async () => {
+    try {
+      setLoading(true);
 
-    // Create the booking
-    const docRef = await addDoc(collection(db, 'bookings'), bookingData);
-    console.log('✅ Booking created with ID:', docRef.id);
-
-    // NEW: If looking for opponent, notify other users
-    if (needOpponent) {
-      try {
-        await notifyUsersAboutOpponentSearch(bookingData, auth.currentUser);
-        console.log('✅ Opponent search notifications sent');
-      } catch (notificationError) {
-        console.error('⚠️ Failed to send notifications:', notificationError);
-        // Don't fail the booking if notifications fail
+      // Validation
+      if (!selectedDate || !selectedTimeSlot) {
+        Alert.alert('❌ Incomplete', 'Please select date and time slot');
+        return;
       }
-    }
 
-    // UPDATED: Enhanced success message
-    const successTitle = needOpponent ? '🎾 Booking Submitted & Opponents Notified!' : '📋 Booking Submitted!';
-    const successMessage = needOpponent 
-      ? `Your booking request has been submitted successfully and is pending for approval.\n\nWe've also notified other players that you're looking for an opponent. Check your notifications for responses!`
-      : `Your booking request has been submitted successfully and is pending for approval.`;
+      if (!isSlotAvailable(selectedTimeSlot)) {
+        Alert.alert('❌ Not Available', 'Selected time slot is not available for this duration');
+        return;
+      }
 
-    Alert.alert(
-      successTitle,
-      successMessage,
-      [
-        {
-          text: needOpponent ? 'View Notifications' : 'OK',
-          onPress: () => {
-            if (needOpponent) {
-              navigation.navigate('Notifications');
-            } else {
-              navigation.goBack();
+      // Calculate affected time slots for operational hours
+      const operationalHours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
+      const [startHours] = selectedTimeSlot.split(':').map(num => parseInt(num));
+      const startIndex = operationalHours.indexOf(startHours);
+      
+      const affectedSlots = [];
+      let currentDate = new Date(selectedDate);
+      
+      for (let i = 0; i < duration; i++) {
+        const currentIndex = startIndex + i;
+        const currentHour = operationalHours[currentIndex];
+        
+        // Handle day transition when we go from 23:00 to 00:00
+        if (currentIndex >= 16 && i > 0) {
+          currentDate = new Date(selectedDate);
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        affectedSlots.push({
+          date: currentDate.toISOString().split('T')[0],
+          timeSlot: `${currentHour.toString().padStart(2, '0')}:00`
+        });
+      }
+
+      // Create booking object
+      const bookingData = {
+        courtId: courtId,
+        courtName: courtDetails.courtNumber,
+        userId: auth.currentUser.uid,
+        date: selectedDate,
+        timeSlot: selectedTimeSlot,
+        duration: duration,
+        endTime: calculateEndTime(selectedTimeSlot, duration),
+        totalPrice: calculateTotal(),
+        needOpponent: needOpponent,
+        status: 'confirmed', // 🚀 AUTO-CONFIRMED (no approval needed)
+        createdAt: new Date(),
+        affectedSlots: affectedSlots,
+        bookingType: duration >= 18 ? 'full_operational' : duration >= 6 ? 'extended' : 'standard',
+        operationalHours: true
+      };
+
+      // Save to Firebase
+      const docRef = await addDoc(collection(db, 'bookings'), bookingData);
+
+      // Success message with booking details
+      const endTimeDisplay = calculateEndTime(selectedTimeSlot, duration);
+      const isFullOperationalHours = duration >= 18;
+      
+      Alert.alert(
+        '✅ Booking Confirmed!',
+        `Your ${isFullOperationalHours ? 'full operational hours ' : ''}booking has been confirmed!\n\n` +
+        `Court: ${courtDetails.courtNumber}\n` +
+        `Date: ${formatDate(selectedDate)}\n` +
+        `Time: ${selectedTimeSlot} - ${endTimeDisplay}\n` +
+        `Duration: ${duration} hour${duration > 1 ? 's' : ''}\n` +
+        `Total: RM ${calculateTotal()}\n\n` +
+        `Booking ID: ${docRef.id.slice(-8)}`,
+        [
+          {
+            text: 'View My Bookings',
+            onPress: () => navigation.navigate('MainTabs', { screen: 'MyBookings' })
+          },
+          {
+            text: 'Book Another Court',
+            onPress: () => {
+              // Reset form
+              setSelectedDate('');
+              setSelectedTimeSlot('');
+              setDuration(1);
+              setNeedOpponent(false);
             }
           }
-        }
-      ]
-    );
-  } catch (error) {
-    console.error('Booking error:', error);
-    Alert.alert('Booking Failed', 'Please try again later');
-  } finally {
-    setLoading(false);
-    setShowConfirmModal(false);
-  }
-};
+        ]
+      );
 
-  const renderTimeSlots = () => {
-    if (!selectedDate) return null;
+    } catch (error) {
+      console.error('❌ Error creating booking:', error);
+      Alert.alert('❌ Booking Failed', 'Please try again later.\n\nError: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const slots = courtDetails.timeSlots || [];
-    
-    return (
-      <Card style={styles.sectionCard}>
-        <Card.Content>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            Available Time Slots
-          </Text>
-          <View style={styles.timeSlotsContainer}>
-            {slots.map((slot) => {
-              const available = isSlotAvailable(slot);
-              return (
-                <Chip
-                  key={slot}
-                  mode={selectedTimeSlot === slot ? 'flat' : 'outlined'}
-                  selected={selectedTimeSlot === slot}
-                  onPress={() => available && setSelectedTimeSlot(slot)}
-                  disabled={!available}
-                  style={[
-                    styles.timeSlot,
-                    selectedTimeSlot === slot && styles.selectedTimeSlot,
-                    !available && styles.disabledTimeSlot
-                  ]}
-                  textStyle={[
-                    styles.timeSlotText,
-                    selectedTimeSlot === slot && styles.selectedTimeSlotText
-                  ]}
-                >
-                  {slot}
-                </Chip>
-              );
-            })}
-          </View>
-          {slots.length === 0 && (
-            <Text style={styles.noSlotsText}>No time slots available</Text>
-          )}
-        </Card.Content>
-      </Card>
-    );
+  const formatDate = (date) => {
+    return new Date(date).toLocaleDateString('en-MY', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const getTodayDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const getMaxDate = () => {
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 30);
+    return maxDate.toISOString().split('T')[0];
   };
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Court Info Card */}
-        <Card style={styles.infoCard}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        
+        {/* Court Info Header */}
+        <Card style={styles.card}>
           <Card.Content>
-            <Text variant="headlineSmall" style={styles.courtName}>
+            <Text variant="headlineSmall" style={styles.courtTitle}>
               {courtDetails.courtNumber || 'Court'}
             </Text>
-            <Text variant="bodyMedium" style={styles.facilityName}>
-              {courtDetails.facilityName || 'Unknown Facility'}
+            <Text variant="bodyMedium" style={styles.courtPrice}>
+              RM {courtDetails.pricePerHour || 80}/hour
             </Text>
-            <Text variant="bodyMedium" style={styles.location}>
-              📍 {courtDetails.location || 'Location not specified'}
+            <Text variant="bodySmall" style={styles.operationalHours}>
+              🕐 Operational Hours: 08:00 - 02:00 (next day)
             </Text>
-            <Text variant="titleMedium" style={styles.price}>
-              💰 RM {courtDetails.pricePerHour || 0}/hour
-            </Text>
+            {duration >= 18 && (
+              <Chip mode="outlined" style={styles.fullOperationChip}>
+                🕐 Full Operational Hours
+              </Chip>
+            )}
           </Card.Content>
         </Card>
 
         {/* Date Selection */}
-        <Card style={styles.sectionCard}>
+        <Card style={styles.card}>
           <Card.Content>
             <Text variant="titleMedium" style={styles.sectionTitle}>
-              Select Date
+              📅 Select Date
             </Text>
             <Calendar
               onDayPress={(day) => setSelectedDate(day.dateString)}
-              markedDates={getMarkedDates()}
-              minDate={getTodayString()}
+              markedDates={{
+                [selectedDate]: { selected: true, selectedColor: '#2196F3' }
+              }}
+              minDate={getTodayDate()}
+              maxDate={getMaxDate()}
               theme={{
-                selectedDayBackgroundColor: Colors.primary,
-                todayTextColor: Colors.primary,
-                arrowColor: Colors.primary,
+                selectedDayBackgroundColor: '#2196F3',
+                todayTextColor: '#2196F3',
+                arrowColor: '#2196F3',
+                textMonthFontWeight: 'bold',
+                textDayHeaderFontWeight: '600',
               }}
             />
+            {selectedDate && (
+              <Text style={styles.selectedDateText}>
+                Selected: {formatDate(selectedDate)}
+              </Text>
+            )}
           </Card.Content>
         </Card>
 
-        {/* Time Slots */}
-        {renderTimeSlots()}
-
         {/* Duration Selection */}
-        {selectedTimeSlot && (
-          <Card style={styles.sectionCard}>
+        <Card style={styles.card}>
+          <Card.Content>
+            <Text variant="titleMedium" style={styles.sectionTitle}>
+              ⏱️ Select Duration
+            </Text>
+            <Text variant="bodySmall" style={styles.durationNote}>
+              Maximum: 18 hours (full operational period)
+            </Text>
+            <RadioButton.Group
+              onValueChange={value => setDuration(value)}
+              value={duration}
+            >
+              {operationalDurationOptions.map((option) => (
+                <View key={option.value} style={[
+                  styles.radioItem,
+                  option.highlight && styles.highlightedOption
+                ]}>
+                  <RadioButton value={option.value} color="#2196F3" />
+                  <View style={styles.radioContent}>
+                    <Text style={[
+                      styles.radioLabel,
+                      option.highlight && styles.highlightedText
+                    ]}>
+                      {option.label}
+                    </Text>
+                    <Text style={[
+                      styles.radioPrice,
+                      option.highlight && styles.highlightedPrice
+                    ]}>
+                      RM {option.price}
+                    </Text>
+                  </View>
+                  {option.highlight && (
+                    <Chip mode="flat" style={styles.clientRequestChip}>
+                      Client Request
+                    </Chip>
+                  )}
+                </View>
+              ))}
+            </RadioButton.Group>
+            
+            {selectedTimeSlot && duration > 1 && (
+              <View style={styles.timeDisplay}>
+                <Text style={styles.timeDisplayText}>
+                  📍 {selectedTimeSlot} → {calculateEndTime(selectedTimeSlot, duration)}
+                </Text>
+              </View>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Time Slot Selection */}
+        {selectedDate && (
+          <Card style={styles.card}>
             <Card.Content>
               <Text variant="titleMedium" style={styles.sectionTitle}>
-                Duration (Hours)
+                🕐 Available Time Slots
               </Text>
-              <RadioButton.Group 
-                onValueChange={value => setDuration(parseInt(value))} 
-                value={duration.toString()}
-              >
-                <View style={styles.radioRow}>
-                  <RadioButton value="1" />
-                  <Text style={styles.radioLabel}>1 hour</Text>
+              <Text variant="bodySmall" style={styles.dateText}>
+                {formatDate(selectedDate)} • {duration} hour{duration > 1 ? 's' : ''}
+              </Text>
+              <Text variant="bodySmall" style={styles.hoursInfo}>
+                Regular Hours: 08:00-23:00 | Early Morning: 00:00-02:00 🌙
+              </Text>
+              
+              {loading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#2196F3" />
+                  <Text style={styles.loadingText}>Checking availability...</Text>
                 </View>
-                <View style={styles.radioRow}>
-                  <RadioButton value="2" />
-                  <Text style={styles.radioLabel}>2 hours</Text>
+              ) : (
+                <View style={styles.timeSlotsContainer}>
+                  {operationalTimeSlots.map((slot) => {
+                    const available = isSlotAvailable(slot);
+                    const isSelected = selectedTimeSlot === slot;
+                    const isEarlyMorningSlot = ['00:00', '01:00', '02:00'].includes(slot);
+                    
+                    return (
+                      <Chip
+                        key={slot}
+                        mode={isSelected ? 'flat' : 'outlined'}
+                        selected={isSelected}
+                        disabled={!available}
+                        onPress={() => available && setSelectedTimeSlot(slot)}
+                        style={[
+                          styles.timeSlotChip,
+                          isSelected && styles.selectedChip,
+                          !available && styles.disabledChip,
+                          isEarlyMorningSlot && styles.earlyMorningSlot
+                        ]}
+                        textStyle={[
+                          styles.timeSlotText,
+                          !available && styles.disabledText,
+                          isEarlyMorningSlot && styles.earlyMorningText
+                        ]}
+                      >
+                        {slot} {isEarlyMorningSlot && '🌙'}
+                      </Chip>
+                    );
+                  })}
                 </View>
-                <View style={styles.radioRow}>
-                  <RadioButton value="3" />
-                  <Text style={styles.radioLabel}>3 hours</Text>
-                </View>
-              </RadioButton.Group>
+              )}
             </Card.Content>
           </Card>
         )}
 
-        {/* Enhanced Opponent Search Section */}
-{selectedTimeSlot && (
-  <Card style={styles.sectionCard}>
-    <Card.Content>
-      <View style={styles.switchRow}>
-        <View style={styles.switchLabel}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>
-            🎾 Looking for Opponent?
-          </Text>
-          <Text variant="bodySmall" style={styles.switchDescription}>
-            We'll notify other players that you're looking for a game partner
-          </Text>
-        </View>
-        <Switch
-          value={needOpponent}
-          onValueChange={setNeedOpponent}
-          color={Colors.primary}
-        />
-      </View>
-      
-      {needOpponent && (
-        <View style={styles.opponentInfo}>
-          <Text variant="bodySmall" style={styles.opponentDescription}>
-            When you book with "Find Opponent", we'll instantly notify all other users about your game. 
-            You'll receive notifications when someone wants to join!
-          </Text>
-          
-          <View style={styles.opponentFeatures}>
-            <Text style={styles.featureText}>✅ Instant notifications to all users</Text>
-            <Text style={styles.featureText}>✅ Simple one-tap response system</Text>
-            <Text style={styles.featureText}>✅ Get responses in your Notifications</Text>
-            <Text style={styles.featureText}>✅ Perfect for finding playing partners</Text>
-          </View>
-        </View>
-      )}
-    </Card.Content>
-  </Card>
-)}
-
-        {/* Booking Summary */}
+        {/* Confirm Booking Button */}
         {selectedDate && selectedTimeSlot && (
-          <Card style={styles.summaryCard}>
+          <Card style={styles.card}>
             <Card.Content>
-              <Text variant="titleMedium" style={styles.summaryTitle}>
-                Booking Summary
-              </Text>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Court:</Text>
-                <Text style={styles.summaryValue}>{courtDetails.courtNumber}</Text>
+              <View style={styles.summaryContainer}>
+                <Text variant="titleMedium" style={styles.summaryTitle}>
+                  📋 Booking Summary
+                </Text>
+                <Text style={styles.summaryText}>
+                  Court: {courtDetails.courtNumber}
+                </Text>
+                <Text style={styles.summaryText}>
+                  Date: {formatDate(selectedDate)}
+                </Text>
+                <Text style={styles.summaryText}>
+                  Time: {selectedTimeSlot} - {calculateEndTime(selectedTimeSlot, duration)}
+                </Text>
+                <Text style={styles.summaryText}>
+                  Duration: {duration} hour{duration > 1 ? 's' : ''}
+                </Text>
+                <Text style={[styles.summaryText, styles.totalPrice]}>
+                  Total: RM {calculateTotal()}
+                </Text>
+                
+                {duration >= 18 && (
+                  <Text style={styles.fullOperationNote}>
+                    🕐 This booking covers our full operational hours (08:00 - 02:00)
+                  </Text>
+                )}
               </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Date:</Text>
-                <Text style={styles.summaryValue}>{selectedDate}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Time:</Text>
-                <Text style={styles.summaryValue}>{selectedTimeSlot}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Duration:</Text>
-                <Text style={styles.summaryValue}>{duration} hour{duration > 1 ? 's' : ''}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Need Opponent:</Text>
-                <Text style={styles.summaryValue}>{needOpponent ? 'Yes' : 'No'}</Text>
-              </View>
-              <Divider style={styles.divider} />
-              <View style={[styles.summaryRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>Total:</Text>
-                <Text style={styles.totalValue}>RM {calculateTotalPrice()}</Text>
-              </View>
+              
+              <Button
+                mode="contained"
+                onPress={createBooking}
+                loading={loading}
+                disabled={loading}
+                style={styles.confirmButton}
+                contentStyle={styles.confirmButtonContent}
+              >
+                {loading ? 'Processing...' : 'Confirm Booking ✅'}
+              </Button>
             </Card.Content>
           </Card>
         )}
-
-        {/* Book Button */}
-        {selectedDate && selectedTimeSlot && (
-          <View style={styles.bookingButtonContainer}>
-            <Button
-              mode="contained"
-              onPress={() => setShowConfirmModal(true)}
-              loading={loading}
-              disabled={loading}
-              style={styles.bookingButton}
-                buttonColor={Colors.primary}
-              contentStyle={styles.bookingButtonContent}
-            >
-              {loading ? 'Processing...' : 'Confirm Booking'}
-            </Button>
-          </View>
-        )}
+        
       </ScrollView>
-
-      {/* Confirmation Modal */}
-      <Portal>
-        <Modal 
-          visible={showConfirmModal} 
-          onDismiss={() => setShowConfirmModal(false)}
-          contentContainerStyle={styles.modalContent}
-        >
-          <Text variant="titleLarge" style={styles.modalTitle}>
-            Confirm Booking
-          </Text>
-          <Text style={styles.modalText}>
-            Court: {courtDetails.courtNumber}{'\n'}
-            Date: {selectedDate}{'\n'}
-            Time: {selectedTimeSlot}{'\n'}
-            Duration: {duration} hour{duration > 1 ? 's' : ''}
-          </Text>
-          <Text style={styles.modalTotal}>
-            Total: RM {calculateTotalPrice()}
-          </Text>
-          <View style={styles.modalActions}>
-            <Button
-              mode="outlined"
-              onPress={() => setShowConfirmModal(false)}
-              style={styles.modalButton}
-            >
-              Cancel
-            </Button>
-            <Button
-              mode="contained"
-              onPress={handleBooking}
-              loading={loading}
-              style={styles.modalButton}
-               buttonColor={Colors.primary}
-            >
-              Confirm
-            </Button>
-          </View>
-        </Modal>
-      </Portal>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -440,209 +547,177 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  errorContainer: {
+  scrollContent: {
+    padding: 16,
+  },
+  card: {
+    marginBottom: 16,
+    elevation: 2,
+  },
+  courtTitle: {
+    fontWeight: 'bold',
+    color: '#1976D2',
+  },
+  courtPrice: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 4,
+  },
+  operationalHours: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  fullOperationChip: {
+    backgroundColor: '#E3F2FD',
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  sectionTitle: {
+    fontWeight: 'bold',
+    marginBottom: 12,
+    color: '#333',
+  },
+  durationNote: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  selectedDateText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#1976D2',
+    fontWeight: '500',
+  },
+  radioItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  highlightedOption: {
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
+    margin: 4,
+  },
+  radioContent: {
     flex: 1,
-    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  radioLabel: {
+    fontSize: 16,
+    color: '#333',
+  },
+  radioPrice: {
+    fontSize: 14,
+    color: '#666',
+  },
+  highlightedText: {
+    fontWeight: 'bold',
+    color: '#1976D2',
+  },
+  highlightedPrice: {
+    fontWeight: 'bold',
+    color: '#1976D2',
+  },
+  clientRequestChip: {
+    backgroundColor: '#FFF3E0',
+  },
+  timeDisplay: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+    borderLeft: 4,
+    borderLeftColor: '#2196F3',
+  },
+  timeDisplayText: {
+    textAlign: 'center',
+    fontWeight: 'bold',
+    color: '#333',
+    fontSize: 16,
+  },
+  dateText: {
+    marginBottom: 8,
+    color: '#666',
+  },
+  hoursInfo: {
+    marginBottom: 12,
+    color: '#888',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  loadingContainer: {
     alignItems: 'center',
     padding: 20,
   },
-  errorText: {
-    fontSize: 18,
-    marginBottom: 20,
-    textAlign: 'center',
-    color: '#d32f2f',
-  },
-  infoCard: {
-    margin: 16,
-    elevation: 3,
-  },
-  courtName: {
-    color: Colors.primary,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  facilityName: {
+  loadingText: {
+    marginTop: 8,
     color: '#666',
-    marginBottom: 4,
-  },
-  location: {
-    color: '#666',
-    marginBottom: 8,
-  },
-  price: {
-    color: Colors.primary,
-    fontWeight: 'bold',
-  },
-  sectionCard: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    elevation: 3,
-  },
-  sectionTitle: {
-    marginBottom: 16,
-    color: Colors.primary,
-    fontWeight: 'bold',
   },
   timeSlotsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  timeSlot: {
-    margin: 4,
+  timeSlotChip: {
+    margin: 2,
   },
-  selectedTimeSlot: {
-    backgroundColor: Colors.primary,
+  selectedChip: {
+    backgroundColor: '#2196F3',
   },
-  disabledTimeSlot: {
+  disabledChip: {
     opacity: 0.5,
+  },
+  earlyMorningSlot: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#2196F3',
   },
   timeSlotText: {
     fontSize: 12,
   },
-  selectedTimeSlotText: {
-    color: 'white',
+  disabledText: {
+    color: '#999',
   },
-  noSlotsText: {
-    textAlign: 'center',
-    color: '#666',
-    fontStyle: 'italic',
+  earlyMorningText: {
+    color: '#1976D2',
   },
-  radioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  radioLabel: {
-    marginLeft: 8,
-    fontSize: 16,
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  switchLabel: {
-    flex: 1,
-    marginRight: 16,
-  },
-  switchDescription: {
-    color: '#666',
-    marginTop: 2,
-  },
-  summaryCard: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    elevation: 3,
-    backgroundColor: '#303030',
-    borderRadius: 12,
+  summaryContainer: {
+    marginBottom: 16,
   },
   summaryTitle: {
-    color: 'white',
     fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     marginBottom: 8,
+    color: '#333',
   },
-  summaryLabel: {
-    color: 'white',
-    fontSize: 15,
-  },
-  summaryValue: {
-    fontWeight: 'bold',
-    color: 'white',
-    fontSize: 15,
-  },
-  divider: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginVertical: 8,
-  },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.3)',
-    paddingTop: 8,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  totalLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  bookingButtonContainer: {
-    marginHorizontal: 16,
-    marginVertical: 16,
-  },
-  bookingButton: {
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  bookingButtonContent: {
-    paddingVertical: 12,
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    margin: 20,
-    borderRadius: 12,
-  },
-  modalTitle: {
-    textAlign: 'center',
-    marginBottom: 16,
-    color: Colors.primary,
-  },
-  modalText: {
-    textAlign: 'center',
-    marginBottom: 16,
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  modalTotal: {
-    textAlign: 'center',
-    color: Colors.primary,
-    fontWeight: 'bold',
-    marginBottom: 24,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  modalButton: {
-    flex: 1,
-    marginHorizontal: 8,
-  },
-   // ADD these new styles:
-  opponentInfo: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-  },
-  opponentDescription: {
+  summaryText: {
+    fontSize: 14,
+    marginBottom: 4,
     color: '#666',
-    lineHeight: 18,
-    marginBottom: 12,
+  },
+  totalPrice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1976D2',
+    marginTop: 8,
+  },
+  fullOperationNote: {
+    fontSize: 12,
+    color: '#666',
     fontStyle: 'italic',
+    marginTop: 8,
+    backgroundColor: '#F0F8FF',
+    padding: 8,
+    borderRadius: 4,
   },
-  opponentFeatures: {
-    backgroundColor: '#f8f9ff',
-    padding: 12,
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: Colors.primary,
+  confirmButton: {
+    backgroundColor: '#2196F3',
   },
-  featureText: {
-    fontSize: 13,
-    color: '#555',
-    marginBottom: 6,
-    lineHeight: 18,
+  confirmButtonContent: {
+    paddingVertical: 8,
   },
 });
+
+export default BookCourtScreen;
