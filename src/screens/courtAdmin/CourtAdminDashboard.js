@@ -110,7 +110,7 @@ export default function CourtAdminDashboard({ navigation }) {
             icon="calendar-check"
             contentStyle={styles.buttonContent}
           >
-            Approve Bookings
+            View All Bookings
           </Button>
 
           <Button
@@ -124,16 +124,7 @@ export default function CourtAdminDashboard({ navigation }) {
             Manage Courts
           </Button>
 
-          <Button
-            mode="contained"
-            onPress={() => navigation.navigate('Reports')}
-            style={[styles.actionButton, { backgroundColor: '#f57c00' }]}
-            textColor="white"
-            icon="bar-chart"
-            contentStyle={styles.buttonContent}
-          >
-            View Reports
-          </Button>
+          
 
           <Divider style={styles.divider} />
           
@@ -194,7 +185,7 @@ export default function CourtAdminDashboard({ navigation }) {
                 {stats.pendingBookings}
               </Text>
               <Text variant="bodySmall" style={styles.statLabel}>
-                Pending Bookings
+                Active Bookings
               </Text>
             </View>
             

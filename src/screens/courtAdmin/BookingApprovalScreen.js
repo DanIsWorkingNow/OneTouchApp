@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
-import { usePermissions } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function BookingManagementScreen({ navigation }) {
   const [bookings, setBookings] = useState([]);
@@ -22,7 +22,7 @@ export default function BookingManagementScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all'); // Default to 'all' instead of 'pending'
   const [submitting, setSubmitting] = useState(false);
-  const { userPermissions } = usePermissions();
+  const { userPermissions } = useAuth();
 
   // UPDATED: Filter options now focus on viewing all bookings instead of approval workflow
   const filterOptions = [
@@ -38,72 +38,108 @@ export default function BookingManagementScreen({ navigation }) {
 
   // UPDATED: Modified to load ALL bookings by default instead of filtering for pending
   const loadBookings = async () => {
-    try {
-      setLoading(true);
-      console.log('📡 Loading bookings with filter:', filterStatus);
-      
-      let q;
-      if (filterStatus === 'all') {
-        // Show ALL bookings (no status filter)
-        q = query(
-          collection(db, 'bookings'),
-          orderBy('createdAt', 'desc')
-        );
-      } else if (filterStatus === 'completed') {
-        // Show bookings that are past their date/time
-        const today = new Date().toISOString().split('T')[0];
-        q = query(
-          collection(db, 'bookings'),
-          where('status', '==', 'confirmed'),
-          where('date', '<', today),
-          orderBy('date', 'desc')
-        );
-      } else {
-        // Filter by specific status (confirmed, cancelled, etc.)
-        q = query(
-          collection(db, 'bookings'),
-          where('status', '==', filterStatus),
-          orderBy('createdAt', 'desc')
-        );
-      }
-      
-      const snapshot = await getDocs(q);
-      const bookingsData = await Promise.all(
-        snapshot.docs.map(async (docSnapshot) => {
-          const bookingData = docSnapshot.data();
-          
-          // Get user details for each booking
-          let userData = {};
-          if (bookingData.userId) {
-            try {
-              const userDoc = await getDoc(doc(db, 'users', bookingData.userId));
-              if (userDoc.exists()) {
-                userData = userDoc.data();
-              }
-            } catch (error) {
-              console.log('Error fetching user data:', error);
-            }
-          }
-
-          return {
-            id: docSnapshot.id,
-            ...bookingData,
-            userName: userData.username || 'Unknown User',
-            userPhone: userData.phoneNumber || 'N/A',
-            userEmail: userData.email || 'N/A'
-          };
-        })
+  try {
+    setLoading(true);
+    console.log('📡 Loading bookings with filter:', filterStatus);
+    
+    let q;
+    if (filterStatus === 'all') {
+      // Show ALL bookings (no status filter) - USE SIMPLE QUERY TO AVOID INDEX ISSUES
+      q = query(
+        collection(db, 'bookings'),
+        orderBy('createdAt', 'desc')
       );
-      
-      setBookings(bookingsData);
-      console.log(`✅ Loaded ${bookingsData.length} bookings`);
-    } catch (error) {
-      console.error('Error loading bookings:', error);
-      Alert.alert('Error', 'Failed to load bookings');
-    } finally {
-      setLoading(false);
+    } else if (filterStatus === 'completed') {
+      // SIMPLIFIED: Show bookings with confirmed status (avoid date filtering for now)
+      q = query(
+        collection(db, 'bookings'),
+        where('status', '==', 'confirmed'),
+        orderBy('createdAt', 'desc')
+      );
+    } else {
+      // Filter by specific status
+      q = query(
+        collection(db, 'bookings'),
+        where('status', '==', filterStatus),
+        orderBy('createdAt', 'desc')
+      );
     }
-  };
+    
+    const snapshot = await getDocs(q);
+    const bookingsData = await Promise.all(
+      snapshot.docs.map(async (docSnapshot) => {
+        const bookingData = docSnapshot.data();
+        
+        // Get user details for each booking
+        let userData = {};
+        if (bookingData.userId) {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', bookingData.userId));
+            if (userDoc.exists()) {
+              userData = userDoc.data();
+            }
+          } catch (error) {
+            console.log('Error fetching user data:', error);
+          }
+        }
+
+        return {
+          id: docSnapshot.id,
+          ...bookingData,
+          userName: userData.username || 'Unknown User',
+          userPhone: userData.phoneNumber || 'N/A',
+          userEmail: userData.email || 'N/A'
+        };
+      })
+    );
+    
+    // MANUAL FILTERING FOR COMPLETED BOOKINGS (to avoid Firebase index issues)
+    let filteredBookings = bookingsData;
+    if (filterStatus === 'completed') {
+      const today = new Date().toISOString().split('T')[0];
+      filteredBookings = bookingsData.filter(booking => {
+        return booking.status === 'confirmed' && booking.date < today;
+      });
+    }
+    
+    setBookings(filteredBookings);
+    console.log(`✅ Loaded ${filteredBookings.length} bookings`);
+  } catch (error) {
+    console.error('Error loading bookings:', error);
+    
+    // FALLBACK: If index error occurs, try simpler query
+    if (error.message?.includes('index')) {
+      console.log('🔄 Trying fallback query without complex filtering...');
+      try {
+        const simpleQuery = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(simpleQuery);
+        const bookingsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          userName: 'User', // Simplified for fallback
+          userPhone: 'N/A',
+          userEmail: 'N/A'
+        }));
+        
+        // Apply client-side filtering
+        let filtered = bookingsData;
+        if (filterStatus !== 'all') {
+          filtered = bookingsData.filter(booking => booking.status === filterStatus);
+        }
+        
+        setBookings(filtered);
+        console.log(`✅ Fallback query loaded ${filtered.length} bookings`);
+      } catch (fallbackError) {
+        console.error('❌ Fallback query also failed:', fallbackError);
+        Alert.alert('Error', 'Failed to load bookings. Please try again later.');
+      }
+    } else {
+      Alert.alert('Error', 'Failed to load bookings');
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -409,7 +445,10 @@ export default function BookingManagementScreen({ navigation }) {
         style={styles.fab}
         onPress={() => navigation.navigate('CourtsList')}
         label="View Courts"
-      />
+         color="white"           // White icon color
+  labelStyle={{ color: 'white' }}  // White text color
+/>
+      
     </View>
   );
 }
@@ -574,5 +613,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: Colors.primary,
+    borderRadius: 28,
+  elevation: 8,
   },
 });

@@ -45,13 +45,7 @@ export default function SystemAdminDashboard({ navigation }) {
               >
                 👥 Manage Users
               </Button>
-              <Button 
-                mode="contained" 
-                style={[styles.adminButton, { backgroundColor: '#1976d2' }]}
-                onPress={() => navigation.navigate('Courts')}
-              >
-                🏟️ Manage Courts
-              </Button>
+              
               <Button 
                 mode="contained" 
                 style={[styles.adminButton, { backgroundColor: '#388e3c' }]}
@@ -63,26 +57,7 @@ export default function SystemAdminDashboard({ navigation }) {
           </Card.Content>
         </Card>
 
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleLarge" style={styles.sectionTitle}>
-              🔑 Your Permissions
-            </Text>
-            <View style={styles.permissionGrid}>
-              {Object.entries(userPermissions).map(([permission, hasIt]) => (
-                <Chip 
-                  key={permission}
-                  style={[styles.permissionChip, { 
-                    backgroundColor: hasIt ? '#4caf50' : '#f44336' 
-                  }]}
-                  textStyle={{ color: 'white', fontSize: 12 }}
-                >
-                  {hasIt ? '✅' : '❌'} {permission}
-                </Chip>
-              ))}
-            </View>
-          </Card.Content>
-        </Card>
+        
 
         <Card style={styles.card}>
           <Card.Content>

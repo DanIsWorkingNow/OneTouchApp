@@ -58,11 +58,7 @@ function SystemAdminTabs() {
         component={UserManagementScreen}
         options={{ title: 'User Management' }}
       />
-      <AdminTab.Screen 
-        name="Courts" 
-        component={AdminCourtsScreen}
-        options={{ title: 'Court Management' }}
-      />
+     
       <AdminTab.Screen 
         name="Logs" 
         component={SystemLogsScreen}

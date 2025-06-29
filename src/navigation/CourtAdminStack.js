@@ -68,18 +68,14 @@ function CourtAdminTabs() {
       <CourtTab.Screen 
         name="Bookings" 
         component={BookingApprovalScreen}
-        options={{ title: 'Approve Bookings' }}
+        options={{ title: 'View Bookings' }}
       />
       <CourtTab.Screen 
         name="Courts" 
         component={CourtManagementScreen}
         options={{ title: 'Manage Courts' }}
       />
-      <CourtTab.Screen 
-        name="Reports" 
-        component={AdminReportsScreen}
-        options={{ title: 'Reports' }}
-      />
+     
     </CourtTab.Navigator>
   );
 }
