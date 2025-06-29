@@ -1,55 +1,65 @@
-// src/screens/courtAdmin/BookingApprovalScreen.js
+// src/screens/courtAdmin/BookingManagementScreen.js
+// UPDATED: Converted from approval screen to general booking management screen
+// Since all bookings are now auto-confirmed, this screen displays ALL bookings by default
+
 import React, { useState, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Alert, RefreshControl } from 'react-native';
+import { View, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { 
-  Text, Card, Button, Chip, SegmentedButtons, 
-  ActivityIndicator, Portal, Modal, TextInput,
-  IconButton, Avatar, Divider
+  Text, Card, Button, Chip, ActivityIndicator, 
+  SegmentedButtons, Avatar, FAB, IconButton 
 } from 'react-native-paper';
 import { 
-  collection, query, getDocs, doc, updateDoc, 
-  where, orderBy, addDoc, getDoc
+  collection, query, where, orderBy, getDocs, 
+  doc, getDoc, updateDoc, deleteDoc 
 } from 'firebase/firestore';
 import { auth, db } from '../../constants/firebaseConfig';
-import { useAuth } from '../../contexts/AuthContext';
+import { Colors } from '../../constants/Colors';
+import { usePermissions } from '../../contexts/AuthContext';
 
-export default function BookingApprovalScreen() {
+export default function BookingManagementScreen({ navigation }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filterStatus, setFilterStatus] = useState('pending');
-  const [selectedBooking, setSelectedBooking] = useState(null);
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all'); // Default to 'all' instead of 'pending'
   const [submitting, setSubmitting] = useState(false);
+  const { userPermissions } = usePermissions();
 
-  const { userPermissions } = useAuth();
-
-  // Filter options for booking status
+  // UPDATED: Filter options now focus on viewing all bookings instead of approval workflow
   const filterOptions = [
-    { value: 'pending', label: 'Pending' },
-    { value: 'approved', label: 'Approved' },
-    { value: 'rejected', label: 'Rejected' },
-    { value: 'all', label: 'All' }
+    { value: 'all', label: 'All' },
+    { value: 'confirmed', label: 'Active' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'cancelled', label: 'Cancelled' }
   ];
 
   useEffect(() => {
-    if (userPermissions?.canApproveBookings) {
-      loadBookings();
-    }
-  }, [filterStatus, userPermissions]);
+    loadBookings();
+  }, [filterStatus]);
 
+  // UPDATED: Modified to load ALL bookings by default instead of filtering for pending
   const loadBookings = async () => {
     try {
       setLoading(true);
+      console.log('📡 Loading bookings with filter:', filterStatus);
+      
       let q;
-
       if (filterStatus === 'all') {
+        // Show ALL bookings (no status filter)
         q = query(
           collection(db, 'bookings'),
           orderBy('createdAt', 'desc')
         );
+      } else if (filterStatus === 'completed') {
+        // Show bookings that are past their date/time
+        const today = new Date().toISOString().split('T')[0];
+        q = query(
+          collection(db, 'bookings'),
+          where('status', '==', 'confirmed'),
+          where('date', '<', today),
+          orderBy('date', 'desc')
+        );
       } else {
+        // Filter by specific status (confirmed, cancelled, etc.)
         q = query(
           collection(db, 'bookings'),
           where('status', '==', filterStatus),
@@ -79,12 +89,14 @@ export default function BookingApprovalScreen() {
             id: docSnapshot.id,
             ...bookingData,
             userName: userData.username || 'Unknown User',
-            userPhone: userData.phoneNumber || 'N/A'
+            userPhone: userData.phoneNumber || 'N/A',
+            userEmail: userData.email || 'N/A'
           };
         })
       );
       
       setBookings(bookingsData);
+      console.log(`✅ Loaded ${bookingsData.length} bookings`);
     } catch (error) {
       console.error('Error loading bookings:', error);
       Alert.alert('Error', 'Failed to load bookings');
@@ -99,274 +111,231 @@ export default function BookingApprovalScreen() {
     setRefreshing(false);
   };
 
-  const handleApproveBooking = async (booking) => {
+  // UPDATED: Instead of approval, provide booking management actions
+  const handleCancelBooking = async (booking) => {
     Alert.alert(
-      'Approve Booking',
-      `Are you sure you want to approve this booking for ${booking.userName}?`,
+      'Cancel Booking',
+      `Are you sure you want to cancel this booking for ${booking.userName}?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'No', style: 'cancel' },
         {
-          text: 'Approve',
-          style: 'default',
-          onPress: () => processBookingApproval(booking, 'approved')
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: () => processCancelBooking(booking)
         }
       ]
     );
   };
 
-  const handleRejectBooking = (booking) => {
-    setSelectedBooking(booking);
-    setRejectionReason('');
-    setShowRejectModal(true);
+  const processCancelBooking = async (booking) => {
+    try {
+      setSubmitting(true);
+      
+      await updateDoc(doc(db, 'bookings', booking.id), {
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        cancelledBy: auth.currentUser.uid
+      });
+
+      Alert.alert('✅ Success', 'Booking cancelled successfully');
+      loadBookings(); // Refresh the list
+    } catch (error) {
+      console.error('Error cancelling booking:', error);
+      Alert.alert('❌ Error', 'Failed to cancel booking');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // 🔧 REPLACE the processBookingApproval function with this SAFER version:
-const processBookingApproval = async (booking, newStatus, reason = '') => {
-  try {
-    setSubmitting(true);
-    const currentUser = auth.currentUser;
-    
-    console.log('🔄 Processing booking approval:', { bookingId: booking.id, newStatus, reason });
-    
-    const updateData = {
-      status: newStatus,
-      [`${newStatus}By`]: currentUser.uid,
-      [`${newStatus}Date`]: new Date(),
-      updatedAt: new Date()
-    };
-
-    if (newStatus === 'rejected' && reason) {
-      updateData.rejectionReason = reason;
-    }
-
-    // ✅ STEP 1: Update booking status (CRITICAL - do this first)
-    console.log('📝 Updating booking status...');
-    await updateDoc(doc(db, 'bookings', booking.id), updateData);
-    console.log('✅ Booking status updated successfully');
-
-    // ✅ STEP 2: Send notification (non-critical - continue if fails)
-    try {
-      await sendNotificationToUser(booking, newStatus, reason);
-    } catch (notificationError) {
-      console.warn('⚠️ Notification failed but continuing:', notificationError);
-    }
-
-    // ✅ STEP 3: Create activity log (non-critical - continue if fails)
-    try {
-      await createActivityLog(booking, newStatus, reason);
-    } catch (logError) {
-      console.warn('⚠️ Activity log failed but continuing:', logError);
-    }
-
+  const handleDeleteBooking = async (booking) => {
     Alert.alert(
-      '✅ Success',
-      `Booking ${newStatus} successfully!`,
-      [{ text: 'OK', onPress: () => {
-        setShowRejectModal(false);
-        loadBookings(); // Refresh the list
-      }}]
+      '⚠️ Delete Booking',
+      `Are you sure you want to permanently delete this booking? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => processDeleteBooking(booking)
+        }
+      ]
     );
+  };
 
-  } catch (error) {
-    console.error('❌ Critical error updating booking:', error);
-    Alert.alert('❌ Error', 'Failed to update booking status. Please try again.');
-  } finally {
-    setSubmitting(false);
-  }
-};
+  const processDeleteBooking = async (booking) => {
+    try {
+      setSubmitting(true);
+      
+      await deleteDoc(doc(db, 'bookings', booking.id));
 
-  // 🔧 REPLACE the sendNotificationToUser function with this FIXED version:
-const sendNotificationToUser = async (booking, status, reason = '') => {
-  try {
-    // ✅ FIXED: Use courtName OR courtNumber, whichever exists
-    const courtDisplayName = booking.courtName || booking.courtNumber || 'Court';
-    
-    const notificationData = {
-      userId: booking.userId,
-      title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-      message: status === 'approved' 
-        ? `Your booking for ${courtDisplayName} on ${formatDate(booking.date)} has been approved!`
-        : `Your booking for ${courtDisplayName} on ${formatDate(booking.date)} has been rejected. ${reason ? `Reason: ${reason}` : ''}`,
-      type: 'booking_update',
-      data: {
-        bookingId: booking.id,
-        status: status,
-        courtName: courtDisplayName,
-        date: booking.date,
-        timeSlot: booking.timeSlot
-      },
-      createdAt: new Date(),
-      read: false
-    };
+      Alert.alert('✅ Success', 'Booking deleted successfully');
+      loadBookings(); // Refresh the list
+    } catch (error) {
+      console.error('Error deleting booking:', error);
+      Alert.alert('❌ Error', 'Failed to delete booking');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-    console.log('📤 Sending notification:', notificationData);
-    await addDoc(collection(db, 'notifications'), notificationData);
-    console.log('✅ Notification sent successfully');
-  } catch (error) {
-    console.error('❌ Error sending notification:', error);
-    // Don't throw error - continue with booking approval even if notification fails
-  }
-};
+  const getStatusColor = (status, date, timeSlot) => {
+    // Determine if booking is in the past
+    const bookingDate = new Date(date);
+    const today = new Date();
+    const isPast = bookingDate < today;
 
-  // 🔧 REPLACE the createActivityLog function with this FIXED version:
-const createActivityLog = async (booking, action, reason = '') => {
-  try {
-    const logData = {
-      type: 'booking_approval',
-      action: action,
-      bookingId: booking.id,
-      adminId: auth.currentUser.uid,
-      adminEmail: auth.currentUser.email,
-      userId: booking.userId,
-      // ✅ FIXED: Handle both courtNumber and courtName fields
-      courtNumber: booking.courtNumber || booking.courtName || 'Unknown Court',
-      courtName: booking.courtName || booking.courtNumber || 'Unknown Court', 
-      bookingDate: booking.date,
-      reason: reason,
-      timestamp: new Date()
-    };
+    switch (status) {
+      case 'confirmed':
+        return isPast ? Colors.success : Colors.primary;
+      case 'cancelled':
+        return Colors.error;
+      default:
+        return Colors.outline;
+    }
+  };
 
-    console.log('📝 Creating activity log:', logData);
-    await addDoc(collection(db, 'activityLogs'), logData);
-    console.log('✅ Activity log created successfully');
-  } catch (error) {
-    console.error('❌ Error creating activity log:', error);
-    // Don't throw error - continue with booking approval even if logging fails
-  }
-};
+  const getStatusText = (status, date, timeSlot) => {
+    const bookingDate = new Date(date);
+    const today = new Date();
+    const isPast = bookingDate < today;
+
+    switch (status) {
+      case 'confirmed':
+        return isPast ? 'COMPLETED' : 'ACTIVE';
+      case 'cancelled':
+        return 'CANCELLED';
+      default:
+        return status.toUpperCase();
+    }
+  };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-MY', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-MY', { 
+      weekday: 'short', 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
     });
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending': return '#ff9800';
-      case 'approved': return '#4caf50';
-      case 'rejected': return '#f44336';
-      case 'completed': return '#2196f3';
-      case 'cancelled': return '#9e9e9e';
-      default: return '#757575';
-    }
+  const formatPrice = (booking) => {
+    const price = booking.totalPrice || booking.totalAmount || 0;
+    return `RM ${price.toFixed(2)}`;
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'pending': return 'clock-outline';
-      case 'approved': return 'check-circle';
-      case 'rejected': return 'close-circle';
-      case 'completed': return 'check-all';
-      case 'cancelled': return 'cancel';
-      default: return 'help-circle';
-    }
+  const canManageBooking = (booking) => {
+    const bookingDate = new Date(booking.date);
+    const today = new Date();
+    const isPast = bookingDate < today;
+    
+    // Can't manage past bookings or already cancelled bookings
+    return !isPast && booking.status !== 'cancelled';
   };
 
   const renderBookingCard = (booking) => (
     <Card key={booking.id} style={styles.bookingCard}>
       <Card.Content>
-        {/* Header with Status */}
+        {/* Header with Court and Status */}
         <View style={styles.cardHeader}>
-          <View style={styles.userInfo}>
-            <Avatar.Text 
-              size={40} 
-              label={booking.userName.charAt(0).toUpperCase()} 
-              style={styles.avatar}
-            />
-            <View style={styles.userDetails}>
-              <Text variant="titleMedium" style={styles.userName}>
-                {booking.userName}
-              </Text>
-              <Text variant="bodySmall" style={styles.userEmail}>
-                {booking.userEmail || 'N/A'}
-              </Text>
-            </View>
+          <View style={styles.courtInfo}>
+            <Text variant="titleMedium" style={styles.courtName}>
+              🏟️ {booking.courtName || booking.courtNumber || 'Court'}
+            </Text>
+            <Chip 
+              mode="flat"
+              textStyle={{ fontSize: 12 }}
+              style={[styles.statusChip, { backgroundColor: getStatusColor(booking.status, booking.date, booking.timeSlot) + '20' }]}
+            >
+              {getStatusText(booking.status, booking.date, booking.timeSlot)}
+            </Chip>
           </View>
-          <Chip 
-            icon={getStatusIcon(booking.status)}
-            style={[styles.statusChip, { backgroundColor: getStatusColor(booking.status) }]}
-            textStyle={styles.statusText}
-          >
-            {booking.status.toUpperCase()}
-          </Chip>
         </View>
 
-        <Divider style={styles.divider} />
+        {/* Customer Information */}
+        <View style={styles.customerInfo}>
+          <Avatar.Text 
+            size={40} 
+            label={booking.userName.charAt(0).toUpperCase()} 
+            style={styles.avatar}
+          />
+          <View style={styles.customerDetails}>
+            <Text variant="titleSmall" style={styles.customerName}>
+              {booking.userName}
+            </Text>
+            <Text variant="bodySmall" style={styles.customerContact}>
+              📧 {booking.userEmail}
+            </Text>
+            {booking.userPhone && booking.userPhone !== 'N/A' && (
+              <Text variant="bodySmall" style={styles.customerContact}>
+                📱 {booking.userPhone}
+              </Text>
+            )}
+          </View>
+        </View>
 
         {/* Booking Details */}
         <View style={styles.bookingDetails}>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Court:</Text>
-            <Text style={styles.detailValue}>{booking.courtNumber}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Date:</Text>
+            <Text style={styles.detailLabel}>📅 Date:</Text>
             <Text style={styles.detailValue}>{formatDate(booking.date)}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Time:</Text>
-            <Text style={styles.detailValue}>
-              {booking.timeSlot} ({booking.duration || 1}h)
-            </Text>
+            <Text style={styles.detailLabel}>⏰ Time:</Text>
+            <Text style={styles.detailValue}>{booking.timeSlot}</Text>
           </View>
+          {booking.duration && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>⏱️ Duration:</Text>
+              <Text style={styles.detailValue}>{booking.duration}h</Text>
+            </View>
+          )}
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Amount:</Text>
-            <Text style={styles.detailValue}>RM {booking.totalAmount}</Text>
+            <Text style={styles.detailLabel}>💰 Amount:</Text>
+            <Text style={styles.detailValue}>{formatPrice(booking)}</Text>
           </View>
           {booking.needOpponent && (
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Needs Opponent:</Text>
-              <Text style={styles.detailValue}>Yes</Text>
+              <Text style={styles.detailLabel}>🤝 Opponent:</Text>
+              <Text style={styles.detailValue}>Looking for opponent</Text>
             </View>
           )}
         </View>
 
-        {/* Approval/Rejection Info */}
-        {booking.status === 'approved' && booking.approvedBy && (
-          <View style={styles.approvalInfo}>
-            <Text style={styles.approvalText}>
-              ✅ Approved on {new Date(booking.approvedDate?.toDate()).toLocaleDateString()}
-            </Text>
-          </View>
-        )}
+        {/* Created Date */}
+        <View style={styles.metaInfo}>
+          <Text variant="bodySmall" style={styles.createdDate}>
+            Created: {new Date(booking.createdAt?.toDate() || booking.createdAt).toLocaleDateString()}
+          </Text>
+        </View>
 
-        {booking.status === 'rejected' && (
-          <View style={styles.rejectionInfo}>
-            <Text style={styles.rejectionText}>
-              ❌ Rejected on {new Date(booking.rejectedDate?.toDate()).toLocaleDateString()}
-            </Text>
-            {booking.rejectionReason && (
-              <Text style={styles.rejectionReason}>
-                Reason: {booking.rejectionReason}
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* Action Buttons */}
-        {booking.status === 'pending' && (
+        {/* Action Buttons - Only show for manageable bookings */}
+        {canManageBooking(booking) && booking.status === 'confirmed' && (
           <View style={styles.actionButtons}>
             <Button
-              mode="contained"
-              style={[styles.actionButton, styles.approveButton]}
-              onPress={() => handleApproveBooking(booking)}
-              icon="check"
+              mode="outlined"
+              style={[styles.actionButton, styles.cancelButton]}
+              onPress={() => handleCancelBooking(booking)}
+              icon="close-circle"
               disabled={submitting}
             >
-              Approve
+              Cancel
             </Button>
+          </View>
+        )}
+
+        {/* Delete button for cancelled bookings (admin cleanup) */}
+        {booking.status === 'cancelled' && (
+          <View style={styles.actionButtons}>
             <Button
               mode="outlined"
-              style={[styles.actionButton, styles.rejectButton]}
-              onPress={() => handleRejectBooking(booking)}
-              icon="close"
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={() => handleDeleteBooking(booking)}
+              icon="delete"
               disabled={submitting}
+              textColor={Colors.error}
             >
-              Reject
+              Delete
             </Button>
           </View>
         )}
@@ -374,15 +343,15 @@ const createActivityLog = async (booking, action, reason = '') => {
     </Card>
   );
 
-  // Permission check
-  if (!userPermissions?.canApproveBookings) {
+  // Permission check - Updated to check for general booking management
+  if (!userPermissions?.canViewAllBookings) {
     return (
       <View style={styles.noPermissionContainer}>
         <Text variant="titleLarge" style={styles.noPermissionText}>
           Access Denied
         </Text>
         <Text variant="bodyMedium" style={styles.noPermissionSubtext}>
-          You don't have permission to approve bookings.
+          You don't have permission to view bookings.
         </Text>
       </View>
     );
@@ -422,71 +391,25 @@ const createActivityLog = async (booking, action, reason = '') => {
         ) : (
           <View style={styles.emptyContainer}>
             <Text variant="bodyLarge" style={styles.emptyText}>
-              No {filterStatus === 'all' ? '' : filterStatus} bookings found
+              No {filterStatus === 'all' ? '' : filterStatus + ' '}bookings found
             </Text>
-            <Text variant="bodySmall" style={styles.emptySubtext}>
-              {filterStatus === 'pending' 
-                ? 'All bookings have been processed!'
-                : 'Try changing the filter to see more bookings.'
+            <Text variant="bodyMedium" style={styles.emptySubtext}>
+              {filterStatus === 'all' 
+                ? 'Bookings will appear here once users start making reservations'
+                : `Try selecting a different filter to see other bookings`
               }
             </Text>
           </View>
         )}
       </ScrollView>
 
-      {/* Rejection Modal */}
-      <Portal>
-        <Modal 
-          visible={showRejectModal} 
-          onDismiss={() => setShowRejectModal(false)}
-          contentContainerStyle={styles.modalContent}
-        >
-          <Text variant="titleLarge" style={styles.modalTitle}>
-            Reject Booking
-          </Text>
-          
-          {selectedBooking && (
-            <>
-              <Text variant="bodyMedium" style={styles.modalSubtitle}>
-                Rejecting booking for {selectedBooking.userName}
-              </Text>
-              <Text variant="bodySmall" style={styles.modalDetails}>
-                {selectedBooking.courtNumber} • {formatDate(selectedBooking.date)} • {selectedBooking.timeSlot}
-              </Text>
-
-              <TextInput
-                label="Rejection Reason (Optional)"
-                value={rejectionReason}
-                onChangeText={setRejectionReason}
-                multiline
-                numberOfLines={3}
-                style={styles.reasonInput}
-                placeholder="e.g., Court maintenance scheduled, Double booking conflict..."
-              />
-
-              <View style={styles.modalButtons}>
-                <Button
-                  mode="outlined"
-                  onPress={() => setShowRejectModal(false)}
-                  style={styles.modalButton}
-                  disabled={submitting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  mode="contained"
-                  onPress={() => processBookingApproval(selectedBooking, 'rejected', rejectionReason)}
-                  style={[styles.modalButton, styles.rejectModalButton]}
-                  loading={submitting}
-                  disabled={submitting}
-                >
-                  Reject Booking
-                </Button>
-              </View>
-            </>
-          )}
-        </Modal>
-      </Portal>
+      {/* Floating Action Button for Quick Actions */}
+      <FAB
+        icon="plus"
+        style={styles.fab}
+        onPress={() => navigation.navigate('CourtsList')}
+        label="View Courts"
+      />
     </View>
   );
 }
@@ -505,16 +428,15 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   countText: {
-    color: '#666',
-    textAlign: 'center',
+    color: Colors.onSurfaceVariant,
   },
   scrollView: {
     flex: 1,
   },
   bookingCard: {
+    margin: 8,
     marginHorizontal: 16,
-    marginVertical: 8,
-    elevation: 3,
+    elevation: 2,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -522,33 +444,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  userInfo: {
+  courtInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  courtName: {
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
+  statusChip: {
+    borderRadius: 12,
+  },
+  customerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.outline + '30',
   },
   avatar: {
     marginRight: 12,
+    backgroundColor: Colors.primary,
   },
-  userDetails: {
+  customerDetails: {
     flex: 1,
   },
-  userName: {
-    fontWeight: 'bold',
+  customerName: {
+    fontWeight: '600',
+    marginBottom: 2,
   },
-  userEmail: {
-    color: '#666',
-  },
-  statusChip: {
-    opacity: 0.9,
-  },
-  statusText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-  divider: {
-    marginVertical: 12,
+  customerContact: {
+    color: Colors.onSurfaceVariant,
+    marginBottom: 1,
   },
   bookingDetails: {
     marginBottom: 12,
@@ -556,127 +486,93 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 4,
   },
   detailLabel: {
-    color: '#666',
-    fontWeight: '500',
+    fontSize: 14,
+    color: Colors.onSurfaceVariant,
+    flex: 1,
   },
   detailValue: {
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '500',
+    color: Colors.onSurface,
+    flex: 1,
+    textAlign: 'right',
   },
-  approvalInfo: {
-    backgroundColor: '#e8f5e8',
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 12,
+  metaInfo: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.outline + '30',
   },
-  approvalText: {
-    color: '#2e7d32',
-    fontSize: 13,
-  },
-  rejectionInfo: {
-    backgroundColor: '#ffebee',
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 12,
-  },
-  rejectionText: {
-    color: '#c62828',
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  rejectionReason: {
-    color: '#d32f2f',
-    fontSize: 12,
+  createdDate: {
+    color: Colors.onSurfaceVariant,
     fontStyle: 'italic',
   },
   actionButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
+    marginTop: 12,
+    gap: 8,
   },
   actionButton: {
-    flex: 1,
-    marginHorizontal: 4,
+    minWidth: 100,
   },
-  approveButton: {
-    backgroundColor: '#4caf50',
+  cancelButton: {
+    borderColor: Colors.error,
   },
-  rejectButton: {
-    borderColor: '#f44336',
+  deleteButton: {
+    borderColor: Colors.error,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    paddingVertical: 50,
   },
   loadingText: {
     marginTop: 16,
-    color: '#666',
+    color: Colors.onSurfaceVariant,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    paddingVertical: 50,
+    paddingHorizontal: 32,
   },
   emptyText: {
     textAlign: 'center',
     marginBottom: 8,
-    color: '#666',
+    color: Colors.onSurfaceVariant,
   },
   emptySubtext: {
     textAlign: 'center',
-    color: '#999',
+    color: Colors.onSurfaceVariant,
+    opacity: 0.7,
   },
   noPermissionContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 32,
   },
   noPermissionText: {
+    marginBottom: 16,
     textAlign: 'center',
-    marginBottom: 8,
-    color: '#f44336',
+    color: Colors.error,
   },
   noPermissionSubtext: {
     textAlign: 'center',
-    color: '#666',
+    color: Colors.onSurfaceVariant,
   },
-  modalContent: {
-    backgroundColor: 'white',
-    padding: 20,
-    margin: 20,
-    borderRadius: 10,
-  },
-  modalTitle: {
-    textAlign: 'center',
-    marginBottom: 16,
-    color: '#f44336',
-  },
-  modalSubtitle: {
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  modalDetails: {
-    textAlign: 'center',
-    marginBottom: 20,
-    color: '#666',
-  },
-  reasonInput: {
-    marginBottom: 20,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  modalButton: {
-    flex: 1,
-    marginHorizontal: 8,
-  },
-  rejectModalButton: {
-    backgroundColor: '#f44336',
+  fab: {
+    position: 'absolute',
+    margin: 16,
+    right: 0,
+    bottom: 0,
+    backgroundColor: Colors.primary,
   },
 });
