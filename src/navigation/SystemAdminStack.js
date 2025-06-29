@@ -59,11 +59,6 @@ function SystemAdminTabs() {
         options={{ title: 'User Management' }}
       />
      
-      <AdminTab.Screen 
-        name="Logs" 
-        component={SystemLogsScreen}
-        options={{ title: 'System Logs' }}
-      />
     </AdminTab.Navigator>
   );
 }

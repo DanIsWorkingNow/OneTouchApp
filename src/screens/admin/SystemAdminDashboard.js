@@ -46,13 +46,7 @@ export default function SystemAdminDashboard({ navigation }) {
                 👥 Manage Users
               </Button>
               
-              <Button 
-                mode="contained" 
-                style={[styles.adminButton, { backgroundColor: '#388e3c' }]}
-                onPress={() => navigation.navigate('Logs')}
-              >
-                📋 System Logs
-              </Button>
+              
             </View>
           </Card.Content>
         </Card>
