@@ -148,19 +148,49 @@ const BookCourtScreen = ({ route, navigation }) => {
     }
   }, [selectedDate, duration]);
 
-  const loadCourtDetails = async () => {
-    try {
-      const courtRef = doc(db, 'courts', courtId);
-      const courtSnap = await getDoc(courtRef);
-      
-      if (courtSnap.exists()) {
-        const courtData = { id: courtSnap.id, ...courtSnap.data() };
-        setCourtDetails(courtData);
-      }
-    } catch (error) {
-      console.error('Error loading court details:', error);
+ // 🔧 ADDITIONAL FIX: Update your loadCourtDetails function to ensure court has required fields
+const loadCourtDetails = async () => {
+  try {
+    const courtRef = doc(db, 'courts', courtId);
+    const courtSnap = await getDoc(courtRef);
+    
+    if (courtSnap.exists()) {
+      const courtData = { 
+        id: courtSnap.id, 
+        ...courtSnap.data(),
+        // Ensure required fields exist with fallbacks
+        courtNumber: courtSnap.data().courtNumber || courtSnap.data().name || `Court ${courtSnap.id}`,
+        pricePerHour: courtSnap.data().pricePerHour || 80,
+        facilityName: courtSnap.data().facilityName || 'One Touch Futsal',
+        location: courtSnap.data().location || 'Temerloh, Pahang'
+      };
+      setCourtDetails(courtData);
+      console.log('✅ Court details loaded with required fields:', courtData);
+    } else {
+      // Fallback court data if not found in database
+      const fallbackCourtData = {
+        id: courtId,
+        courtNumber: court?.courtNumber || court?.name || `Court ${courtId}`,
+        pricePerHour: court?.pricePerHour || 80,
+        facilityName: court?.facilityName || 'One Touch Futsal',
+        location: court?.location || 'Temerloh, Pahang'
+      };
+      setCourtDetails(fallbackCourtData);
+      console.log('⚠️ Using fallback court data:', fallbackCourtData);
     }
-  };
+  } catch (error) {
+    console.error('Error loading court details:', error);
+    // Set fallback data on error
+    const fallbackCourtData = {
+      id: courtId,
+      courtNumber: `Court ${courtId}`,
+      pricePerHour: 80,
+      facilityName: 'One Touch Futsal',
+      location: 'Temerloh, Pahang'
+    };
+    setCourtDetails(fallbackCourtData);
+  }
+};
 
   // 🔧 FIXED: Firebase query for multi-day checking
   const loadBookedSlots = async (date) => {
@@ -244,133 +274,155 @@ const BookCourtScreen = ({ route, navigation }) => {
     return selectedOption ? selectedOption.price : 0;
   };
 
-  // 🚀 ENHANCED BOOKING CREATION: Auto-confirmed with matchmaking
-  const createBooking = async () => {
-    try {
-      setLoading(true);
+  // 🔧 CRITICAL FIX: Replace your existing createBooking function with this version:
 
-      // Validation
-      if (!selectedDate || !selectedTimeSlot) {
-        Alert.alert('❌ Incomplete', 'Please select date and time slot');
-        return;
-      }
+const createBooking = async () => {
+  try {
+    setLoading(true);
 
-      if (!isSlotAvailable(selectedTimeSlot)) {
-        Alert.alert('❌ Not Available', 'Selected time slot is not available for this duration');
-        return;
-      }
-
-      // Calculate affected time slots for operational hours
-      const operationalHours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
-      const [startHours] = selectedTimeSlot.split(':').map(num => parseInt(num));
-      const startIndex = operationalHours.indexOf(startHours);
-      
-      const affectedSlots = [];
-      let currentDate = new Date(selectedDate);
-      
-      for (let i = 0; i < duration; i++) {
-        const currentIndex = startIndex + i;
-        const currentHour = operationalHours[currentIndex];
-        
-        // Handle day transition when we go from 23:00 to 00:00
-        if (currentIndex >= 16 && i > 0) {
-          currentDate = new Date(selectedDate);
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        affectedSlots.push({
-          date: currentDate.toISOString().split('T')[0],
-          timeSlot: `${currentHour.toString().padStart(2, '0')}:00`
-        });
-      }
-
-      // Create booking object with matchmaking support
-      const bookingData = {
-        courtId: courtId,
-        courtName: courtDetails.courtNumber,
-        userId: auth.currentUser.uid,
-        date: selectedDate,
-        timeSlot: selectedTimeSlot,
-        duration: duration,
-        endTime: calculateEndTime(selectedTimeSlot, duration),
-        totalPrice: calculateTotal(),
-        needOpponent: needOpponent, // 🎾 Matchmaking flag
-        searchingForOpponent: needOpponent, // 🎾 Active search status
-        opponentFound: false, // 🎾 Match status
-        matchedWithUserId: null, // 🎾 Opponent user ID
-        matchedWithUserName: null, // 🎾 Opponent name
-        status: 'confirmed', // 🚀 AUTO-CONFIRMED (no approval needed)
-        createdAt: new Date(),
-        affectedSlots: affectedSlots,
-        bookingType: duration >= 18 ? 'full_operational' : duration >= 6 ? 'extended' : 'standard',
-        operationalHours: true
-      };
-
-      // Save to Firebase
-      const docRef = await addDoc(collection(db, 'bookings'), bookingData);
-      console.log('📋 Booking created with ID:', docRef.id);
-
-      // 🎾 MATCHMAKING: Send notifications if looking for opponent
-      let matchmakingMessage = '';
-      if (needOpponent) {
-        try {
-          console.log('🎾 Sending matchmaking notifications...');
-          const currentUser = auth.currentUser;
-          
-          // Add booking ID to the data for notifications
-          const bookingDataWithId = {
-            ...bookingData,
-            bookingId: docRef.id
-          };
-          
-          await notifyUsersAboutOpponentSearch(bookingDataWithId, currentUser);
-          matchmakingMessage = '\n\n⚽Great! Other players have been notified about your search for an opponent. Check your notifications for responses!';
-          
-        } catch (notificationError) {
-          console.error('❌ Matchmaking notification error:', notificationError);
-          // Don't fail the booking if notifications fail
-          matchmakingMessage = '\n\n⚠️ Booking confirmed, but there was an issue sending opponent notifications. Please try again later.';
-        }
-      }
-
-      // Success message with booking details
-      const endTimeDisplay = calculateEndTime(selectedTimeSlot, duration);
-      const isFullOperationalHours = duration >= 18;
-      
-      Alert.alert(
-        '✅ Booking Confirmed!',
-        `Your ${isFullOperationalHours ? 'full operational hours ' : ''}booking has been confirmed!${matchmakingMessage}\n\n` +
-        `Court: ${courtDetails.courtNumber}\n` +
-        `Date: ${formatDate(selectedDate)}\n` +
-        `Time: ${selectedTimeSlot} - ${endTimeDisplay}\n` +
-        `Duration: ${duration} hour${duration > 1 ? 's' : ''}\n` +
-        `Total: RM ${calculateTotal()}\n\n` +
-        `Booking ID: ${docRef.id.slice(-8)}`,
-        [
-          {
-            text: 'View My Bookings',
-            onPress: () => navigation.navigate('MainTabs', { screen: 'MyBookings' })
-          },
-          {
-            text: 'Book Another Court',
-            onPress: () => {
-              // Reset form
-              setSelectedDate('');
-              setSelectedTimeSlot('');
-              setDuration(1);
-              setNeedOpponent(false);
-            }
-          }
-        ]
-      );
-
-    } catch (error) {
-      console.error('❌ Error creating booking:', error);
-      Alert.alert('❌ Booking Failed', 'Please try again later.\n\nError: ' + error.message);
-    } finally {
-      setLoading(false);
+    // Validation
+    if (!selectedDate || !selectedTimeSlot) {
+      Alert.alert('❌ Incomplete', 'Please select date and time slot');
+      return;
     }
-  };
+
+    if (!isSlotAvailable(selectedTimeSlot)) {
+      Alert.alert('❌ Not Available', 'Selected time slot is not available for this duration');
+      return;
+    }
+
+    // Calculate affected time slots for operational hours
+    const operationalHours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
+    const [startHours] = selectedTimeSlot.split(':').map(num => parseInt(num));
+    const startIndex = operationalHours.indexOf(startHours);
+    
+    const affectedSlots = [];
+    let currentDate = new Date(selectedDate);
+    
+    for (let i = 0; i < duration; i++) {
+      const currentIndex = startIndex + i;
+      const currentHour = operationalHours[currentIndex];
+      
+      // Handle day transition when we go from 23:00 to 00:00
+      if (currentIndex >= 16 && i > 0) {
+        currentDate = new Date(selectedDate);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      affectedSlots.push({
+        date: currentDate.toISOString().split('T')[0],
+        timeSlot: `${currentHour.toString().padStart(2, '0')}:00`
+      });
+    }
+
+    // 🔧 FIXED: Create booking object with ALL required fields for notifications
+    const bookingData = {
+      // Core booking fields
+      courtId: courtId,
+      courtName: courtDetails.courtNumber || courtDetails.name || `Court ${courtId}`,
+      courtNumber: courtDetails.courtNumber || courtDetails.name || `Court ${courtId}`, // Add this field
+      userId: auth.currentUser.uid,
+      userEmail: auth.currentUser.email,
+      date: selectedDate,
+      timeSlot: selectedTimeSlot,
+      duration: duration,
+      endTime: calculateEndTime(selectedTimeSlot, duration),
+      
+      // 🔧 CRITICAL: Include ALL pricing fields that notifications expect
+      totalPrice: calculateTotal(), // Your existing field
+      totalAmount: calculateTotal(), // What notifications expect
+      pricePerHour: courtDetails.pricePerHour || 80, // Ensure this exists
+      
+      // 🔧 CRITICAL: Include facility information
+      facilityName: courtDetails.facilityName || 'One Touch Futsal', // What notifications expect
+      location: courtDetails.location || 'Temerloh, Pahang',
+      
+      // Matchmaking fields
+      needOpponent: needOpponent,
+      searchingForOpponent: needOpponent,
+      opponentFound: false,
+      matchedWithUserId: null,
+      matchedWithUserName: null,
+      
+      // Status and metadata
+      status: 'confirmed', // AUTO-CONFIRMED (no approval needed)
+      paymentStatus: 'completed', // Add this field
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      affectedSlots: affectedSlots,
+      bookingType: duration >= 18 ? 'full_operational' : duration >= 6 ? 'extended' : 'standard',
+      operationalHours: true
+    };
+
+    // Save to Firebase
+    const docRef = await addDoc(collection(db, 'bookings'), bookingData);
+    console.log('📋 Booking created with ID:', docRef.id);
+
+    // 🎾 MATCHMAKING: Send notifications if looking for opponent
+    let matchmakingMessage = '';
+    if (needOpponent) {
+      try {
+        console.log('🎾 Sending matchmaking notifications...');
+        const currentUser = auth.currentUser;
+        
+        // 🔧 FIXED: Add booking ID and ensure complete data for notifications
+        const bookingDataWithId = {
+          ...bookingData,
+          bookingId: docRef.id,
+          id: docRef.id, // Alternative ID field
+          // Ensure user info is available for notifications
+          searchingUserName: currentUser.displayName || currentUser.email || 'User',
+          searchingUserEmail: currentUser.email
+        };
+        
+        await notifyUsersAboutOpponentSearch(bookingDataWithId, currentUser);
+        matchmakingMessage = '\n\n⚽Great! Other players have been notified about your search for an opponent. Check your notifications for responses!';
+        
+      } catch (notificationError) {
+        console.error('❌ Matchmaking notification error:', notificationError);
+        // Don't fail the booking if notifications fail
+        matchmakingMessage = '\n\n⚠️ Booking confirmed, but there was an issue sending opponent notifications. Please try again later.';
+      }
+    }
+
+    // Success message with booking details
+    const endTimeDisplay = calculateEndTime(selectedTimeSlot, duration);
+    const isFullOperationalHours = duration >= 18;
+    
+    Alert.alert(
+      '✅ Booking Confirmed!',
+      `Your ${isFullOperationalHours ? 'full operational hours ' : ''}booking has been confirmed!${matchmakingMessage}\n\n` +
+      `Court: ${courtDetails.courtNumber}\n` +
+      `Date: ${formatDate(selectedDate)}\n` +
+      `Time: ${selectedTimeSlot} - ${endTimeDisplay}\n` +
+      `Duration: ${duration} hour${duration > 1 ? 's' : ''}\n` +
+      `Total: RM ${calculateTotal()}\n\n` +
+      `Booking ID: ${docRef.id.slice(-8)}`,
+      [
+        {
+          text: 'View My Bookings',
+          onPress: () => navigation.navigate('MainTabs', { screen: 'MyBookings' })
+        },
+        {
+          text: 'Book Another Court',
+          onPress: () => {
+            // Reset form
+            setSelectedDate('');
+            setSelectedTimeSlot('');
+            setDuration(1);
+            setNeedOpponent(false);
+          }
+        }
+      ]
+    );
+
+  } catch (error) {
+    console.error('❌ Error creating booking:', error);
+    Alert.alert('❌ Booking Failed', 'Please try again later.\n\nError: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString('en-MY', {

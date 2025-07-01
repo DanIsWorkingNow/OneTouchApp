@@ -1,5 +1,5 @@
 // src/screens/app/NotificationsScreen.js
-// FIXED: Complete matchmaking details in notifications
+// COMPLETE FIXED VERSION: Safe text rendering and comprehensive error handling
 
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native';
@@ -26,32 +26,48 @@ export default function NotificationsScreen({ navigation }) {
 
   useEffect(() => {
     const user = auth.currentUser;
-    if (!user) return;
-
-    // Use real-time listener for both booking updates AND matchmaking notifications
-    const notificationsQuery = query(
-      collection(db, 'notifications'),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
-      const notificationsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      setNotifications(notificationsData);
-      
-      // Count unread notifications
-      const unread = notificationsData.filter(notif => !notif.read).length;
-      setUnreadCount(unread);
-      
-      console.log(`📬 Loaded ${notificationsData.length} notifications (${unread} unread)`);
+    if (!user) {
       setLoading(false);
-    });
+      return;
+    }
 
-    return unsubscribe;
+    try {
+      // Use real-time listener for notifications
+      const notificationsQuery = query(
+        collection(db, 'notifications'),
+        where('userId', '==', user.uid),
+        orderBy('createdAt', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
+        try {
+          const notificationsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          setNotifications(notificationsData);
+          
+          // Count unread notifications
+          const unread = notificationsData.filter(notif => !notif.read).length;
+          setUnreadCount(unread);
+          
+          console.log(`📬 Loaded ${notificationsData.length} notifications (${unread} unread)`);
+          setLoading(false);
+        } catch (error) {
+          console.error('Error processing notifications:', error);
+          setLoading(false);
+        }
+      }, (error) => {
+        console.error('Error listening to notifications:', error);
+        setLoading(false);
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error setting up notifications listener:', error);
+      setLoading(false);
+    }
   }, []);
 
   const onRefresh = async () => {
@@ -99,243 +115,303 @@ export default function NotificationsScreen({ navigation }) {
     }
   };
 
-  // 🔧 FIXED: Enhanced opponent response with complete details
+  // 🔧 FIXED: Enhanced opponent response with safe data handling
   const handleOpponentResponse = async (notification) => {
-    // Format the date nicely
-    const formatDate = (dateString) => {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-MY', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
-    };
+    try {
+      // Safe date formatting with error handling
+      const formatDate = (dateString) => {
+        try {
+          if (!dateString) return 'Date not specified';
+          const date = new Date(dateString);
+          return date.toLocaleDateString('en-MY', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          });
+        } catch (error) {
+          return dateString || 'Date not specified';
+        }
+      };
 
-    // Calculate duration display
-    const getDurationText = (duration) => {
-      if (!duration) return "Duration not specified";
-      return duration === 1 ? "1 hour" : `${duration} hours`;
-    };
+      // Safe duration display
+      const getDurationText = (duration) => {
+        try {
+          if (!duration || isNaN(duration)) return "Duration not specified";
+          return duration === 1 ? "1 hour" : `${duration} hours`;
+        } catch (error) {
+          return "Duration not specified";
+        }
+      };
 
-    // 🎯 COMPLETE ALERT with all details
-    const alertMessage = `Do you want to play with ${notification.searchingUserName}?
+      // 🔧 FIXED: Safe data access with fallbacks
+      const searchingUserName = notification.searchingUserName || notification.searchingUserEmail || 'A player';
+      const courtName = notification.courtName || 'Court location';
+      const date = notification.date || 'Date TBD';
+      const timeSlot = notification.timeSlot || 'Time TBD';
+      const duration = notification.duration || 1;
 
-📍 Court: ${notification.courtName || 'Not specified'}
-📅 Date: ${formatDate(notification.date) || 'Not specified'}
-⏰ Time: ${notification.timeSlot || 'Not specified'}
-⏱️ Duration: ${getDurationText(notification.duration)}`;
+      // 🎯 COMPLETE ALERT with all details safely rendered
+      const alertMessage = `Do you want to play with ${searchingUserName}?
 
-    Alert.alert(
-      '⚽ Join Game?',
-      alertMessage,
-      [
-        { text: 'Maybe Later', style: 'cancel' },
-        { 
-          text: 'Yes, I\'m Interested!',
-          onPress: async () => {
-            setProcessingResponse(notification.id);
-            
-            try {
-              // Use the matchmaking service
-              const result = await respondToOpponentSearch(
-                notification.id,
-                notification.searchingUserId,
-                auth.currentUser
-              );
+📍 Court: ${courtName}
+📅 Date: ${formatDate(date)}
+⏰ Time: ${timeSlot}
+⏱️ Duration: ${getDurationText(duration)}`;
 
-              if (result.success) {
-                Alert.alert(
-                  '🎉 Response Sent!',
-                  `We've let ${notification.searchingUserName} know you're interested. They'll receive your response!`,
-                  [{ text: 'Great!' }]
-                );
-              } else {
-                Alert.alert('❌ Error', result.error || 'Failed to send response');
-              }
+      Alert.alert(
+        '⚽ Join Game?',
+        alertMessage,
+        [
+          { text: 'Maybe Later', style: 'cancel' },
+          { 
+            text: 'Yes, I\'m Interested!',
+            onPress: async () => {
+              setProcessingResponse(notification.id);
               
-            } catch (error) {
-              console.error('❌ Error responding to opponent search:', error);
-              Alert.alert('❌ Error', 'Failed to send response. Please try again.');
-            } finally {
-              setProcessingResponse(null);
+              try {
+                // Use the matchmaking service
+                const result = await respondToOpponentSearch(
+                  notification.id,
+                  notification.searchingUserId,
+                  auth.currentUser
+                );
+
+                if (result.success) {
+                  Alert.alert(
+                    '🎉 Response Sent!',
+                    `We've let ${searchingUserName} know you're interested. They'll receive your response!`,
+                    [{ text: 'Great!' }]
+                  );
+                } else {
+                  Alert.alert('❌ Error', result.error || 'Failed to send response');
+                }
+                
+              } catch (error) {
+                console.error('❌ Error responding to opponent search:', error);
+                Alert.alert('❌ Error', 'Failed to send response. Please try again.');
+              } finally {
+                setProcessingResponse(null);
+              }
             }
           }
-        }
-      ]
-    );
+        ]
+      );
+    } catch (error) {
+      console.error('Error in handleOpponentResponse:', error);
+      Alert.alert('❌ Error', 'Unable to process response at this time.');
+    }
   };
 
   const handleNotificationPress = async (notification) => {
-    // Mark as read when pressed
-    if (!notification.read) {
-      await markAsRead(notification.id);
-    }
-    
-    // Navigate based on notification type
-    if (notification.type === 'booking_update' && notification.data?.bookingId) {
-      navigation.navigate('MyBookings');
-    } else if (notification.type === 'match_response') {
-      // Could navigate to a matches screen in the future
-      Alert.alert('Match Response', 'Someone is interested in playing with you! Contact them to confirm details.');
+    try {
+      // Mark as read when pressed
+      if (!notification.read) {
+        await markAsRead(notification.id);
+      }
+      
+      // Navigate based on notification type
+      if (notification.type === 'booking_update' && notification.data?.bookingId) {
+        navigation.navigate('MyBookings');
+      } else if (notification.type === 'match_response') {
+        // Could navigate to a matches screen in the future
+        Alert.alert('Match Response', 'Someone is interested in playing with you! Contact them to confirm details.');
+      }
+    } catch (error) {
+      console.error('Error handling notification press:', error);
     }
   };
 
   // Enhanced notification icons for different types
   const getNotificationIcon = (type, status) => {
-    // Existing booking update icons
-    if (type === 'booking_update') {
-      switch (status) {
-        case 'approved': return '✅';
-        case 'rejected': return '❌';
-        case 'cancelled': return '🚫';
-        default: return '📋';
+    try {
+      // Existing booking update icons
+      if (type === 'booking_update') {
+        switch (status) {
+          case 'approved': return '✅';
+          case 'rejected': return '❌';
+          case 'cancelled': return '🚫';
+          default: return '📋';
+        }
       }
+      
+      // Matchmaking notification icons
+      if (type === 'opponent_search') return '⚽';
+      if (type === 'match_response') return '🤝';
+      
+      return '📢';
+    } catch (error) {
+      return '📢';
     }
-    
-    // Matchmaking notification icons
-    if (type === 'opponent_search') return '⚽';
-    if (type === 'match_response') return '🤝';
-    
-    return '📢';
   };
 
   // Enhanced notification colors for different types
   const getNotificationColor = (type, status) => {
-    // Existing booking update colors
-    if (type === 'booking_update') {
-      switch (status) {
-        case 'approved': return '#4CAF50';
-        case 'rejected': return '#F44336';
-        case 'cancelled': return '#757575';
-        default: return '#FF9800';
+    try {
+      // Existing booking update colors
+      if (type === 'booking_update') {
+        switch (status) {
+          case 'approved': return '#4CAF50';
+          case 'rejected': return '#F44336';
+          case 'cancelled': return '#757575';
+          default: return '#FF9800';
+        }
       }
+      
+      // Matchmaking notification colors
+      if (type === 'opponent_search') return '#FF6B35';
+      if (type === 'match_response') return '#4CAF50';
+      
+      return Colors.primary;
+    } catch (error) {
+      return Colors.primary;
     }
-    
-    // Matchmaking notification colors
-    if (type === 'opponent_search') return '#FF6B35';
-    if (type === 'match_response') return '#4CAF50';
-    
-    return Colors.primary;
   };
 
   const formatTime = (timestamp) => {
-    if (!timestamp) return '';
-    
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const now = new Date();
-    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return `${Math.floor(diffInMinutes / 1440)}d ago`;
+    try {
+      if (!timestamp) return '';
+      
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      const now = new Date();
+      const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+      
+      if (diffInMinutes < 1) return 'Just now';
+      if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+      if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+      return `${Math.floor(diffInMinutes / 1440)}d ago`;
+    } catch (error) {
+      return 'Unknown time';
+    }
   };
 
-  // Render individual notification card
+  // 🔧 FIXED: Safer notification rendering with comprehensive error handling
   const renderNotification = (notification) => {
-    const cardStyle = [
-      styles.notificationCard,
-      !notification.read && styles.unreadCard
-    ];
+    try {
+      const cardStyle = [
+        styles.notificationCard,
+        !notification.read && styles.unreadCard
+      ];
 
-    return (
-      <Card key={notification.id} style={cardStyle}>
-        <Card.Content>
-          <View style={styles.notificationHeader}>
-            <View style={styles.avatarContainer}>
-              <Avatar.Text 
-                size={40} 
-                label={getNotificationIcon(notification.type, notification.status)}
-                style={[
-                  styles.avatar, 
-                  { backgroundColor: getNotificationColor(notification.type, notification.status) }
-                ]}
-              />
-              {!notification.read && (
-                <View style={styles.unreadDot} />
-              )}
-            </View>
-            
-            <View style={styles.notificationContent}>
-              <Text variant="bodyMedium" style={styles.notificationTitle}>
-                {notification.title}
-              </Text>
-              <Text variant="bodySmall" style={styles.notificationMessage}>
-                {notification.message}
-              </Text>
-              <Text variant="bodySmall" style={styles.timeText}>
-                {formatTime(notification.createdAt)}
-              </Text>
-            </View>
-            
-            <IconButton
-              icon="close"
-              size={16}
-              onPress={() => deleteNotification(notification.id)}
-              style={styles.deleteButton}
-            />
-          </View>
+      // Safe data extraction with fallbacks
+      const title = notification.title || 'Notification';
+      const message = notification.message || 'No message';
+      const type = notification.type || 'general';
+      const status = notification.status || '';
+      const isUnread = !notification.read;
+      const hasResponded = notification.responded;
 
-          {/* 🎾 ENHANCED: Matchmaking action buttons */}
-          {notification.type === 'opponent_search' && !notification.responded && (
-            <View style={styles.actionButtons}>
-              <Button
-                mode="contained"
-                onPress={() => handleOpponentResponse(notification)}
-                style={styles.interestButton}
-                disabled={processingResponse === notification.id}
-                loading={processingResponse === notification.id}
-              >
-                ⚽ I'm Interested!
-              </Button>
+      return (
+        <Card key={notification.id} style={cardStyle}>
+          <Card.Content>
+            <View style={styles.notificationHeader}>
+              <View style={styles.avatarContainer}>
+                <Avatar.Text 
+                  size={40} 
+                  label={getNotificationIcon(type, status)}
+                  style={[
+                    styles.avatar, 
+                    { backgroundColor: getNotificationColor(type, status) }
+                  ]}
+                />
+                {isUnread && (
+                  <View style={styles.unreadDot} />
+                )}
+              </View>
               
-              <Button
-                mode="outlined"
-                onPress={() => markAsRead(notification.id)}
-                style={styles.dismissButton}
-                disabled={processingResponse !== null}
-              >
-                Not This Time
-              </Button>
-            </View>
-          )}
-
-          {/* Show response status for matchmaking */}
-          {notification.responded && notification.type === 'opponent_search' && (
-            <View style={styles.responseStatus}>
-              <Chip icon="check" style={styles.respondedChip} textStyle={styles.respondedText}>
-                You Responded
-              </Chip>
-            </View>
-          )}
-          
-          {/* 🔧 ENHANCED: Show booking details for all notifications */}
-          {(notification.courtName || notification.date || notification.timeSlot) && (
-            <View style={styles.additionalInfo}>
-              <Divider style={styles.divider} />
-              <Text variant="bodySmall" style={styles.bookingInfo}>
-                📍 {notification.courtName || notification.data?.courtName || 'Court'} • 
-                📅 {notification.date || notification.data?.date || 'Date TBD'} • 
-                ⏰ {notification.timeSlot || notification.data?.timeSlot || 'Time TBD'}
-                {notification.duration && ` • ⏱️ ${notification.duration === 1 ? '1 hour' : `${notification.duration} hours`}`}
-              </Text>
-            </View>
-          )}
-
-          {/* Matchmaking specific info */}
-          {(notification.type === 'opponent_search' || notification.type === 'match_response') && (
-            <View style={styles.matchDetails}>
-              {notification.type === 'match_response' && (
-                <Text variant="bodySmall" style={styles.matchInfo}>
-                  🎉 Contact {notification.respondingUserName} to confirm match details
+              <View style={styles.notificationContent}>
+                <Text variant="bodyMedium" style={styles.notificationTitle}>
+                  {title}
                 </Text>
-              )}
+                <Text variant="bodySmall" style={styles.notificationMessage}>
+                  {message}
+                </Text>
+                <Text variant="bodySmall" style={styles.timeText}>
+                  {formatTime(notification.createdAt)}
+                </Text>
+              </View>
+              
+              <IconButton
+                icon="close"
+                size={16}
+                onPress={() => deleteNotification(notification.id)}
+                style={styles.deleteButton}
+              />
             </View>
-          )}
-        </Card.Content>
-      </Card>
-    );
+
+            {/* 🎾 ENHANCED: Matchmaking action buttons with safe rendering */}
+            {type === 'opponent_search' && !hasResponded && (
+              <View style={styles.actionButtons}>
+                <Button
+                  mode="contained"
+                  onPress={() => handleOpponentResponse(notification)}
+                  style={styles.interestButton}
+                  disabled={processingResponse === notification.id}
+                  loading={processingResponse === notification.id}
+                >
+                  <Text style={{ color: 'white' }}>⚽ I'm Interested!</Text>
+                </Button>
+                
+                <Button
+                  mode="outlined"
+                  onPress={() => markAsRead(notification.id)}
+                  style={styles.dismissButton}
+                  disabled={processingResponse !== null}
+                >
+                  <Text>Not This Time</Text>
+                </Button>
+              </View>
+            )}
+
+            {/* Show response status for matchmaking */}
+            {hasResponded && type === 'opponent_search' && (
+              <View style={styles.responseStatus}>
+                <Chip icon="check" style={styles.respondedChip} textStyle={styles.respondedText}>
+                  <Text style={styles.respondedText}>✓ You Responded</Text>
+                </Chip>
+              </View>
+            )}
+            
+            {/* 🔧 ENHANCED: Show booking details safely */}
+            {(notification.courtName || notification.date || notification.timeSlot) && (
+              <View style={styles.additionalInfo}>
+                <Divider style={styles.divider} />
+                <Text variant="bodySmall" style={styles.bookingInfo}>
+                  📍 {notification.courtName || notification.data?.courtName || 'Court'} • 
+                  📅 {notification.date || notification.data?.date || 'Date TBD'} • 
+                  ⏰ {notification.timeSlot || notification.data?.timeSlot || 'Time TBD'}
+                  {notification.duration && (
+                    <Text> • ⏱️ {notification.duration === 1 ? '1 hour' : `${notification.duration} hours`}</Text>
+                  )}
+                </Text>
+              </View>
+            )}
+
+            {/* Matchmaking specific info with safe rendering */}
+            {(type === 'opponent_search' || type === 'match_response') && (
+              <View style={styles.matchDetails}>
+                {type === 'match_response' && (
+                  <Text variant="bodySmall" style={styles.matchInfo}>
+                    🎉 Contact {notification.respondingUserName || 'the interested player'} to confirm match details
+                  </Text>
+                )}
+              </View>
+            )}
+          </Card.Content>
+        </Card>
+      );
+    } catch (error) {
+      console.error('Error rendering notification:', error);
+      // Fallback notification card for errors
+      return (
+        <Card key={notification.id || Math.random()} style={styles.notificationCard}>
+          <Card.Content>
+            <Text style={styles.notificationTitle}>Error Loading Notification</Text>
+            <Text style={styles.notificationMessage}>Unable to display this notification</Text>
+          </Card.Content>
+        </Card>
+      );
+    }
   };
 
   if (loading) {
@@ -366,7 +442,7 @@ export default function NotificationsScreen({ navigation }) {
             onPress={markAllAsRead}
             style={styles.markAllButton}
           >
-            Mark all read
+            <Text>Mark all read</Text>
           </Button>
         )}
       </View>
