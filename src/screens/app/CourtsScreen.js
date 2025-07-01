@@ -1,10 +1,9 @@
-// src/screens/app/CourtsScreen.js - FIXED VERSION
+// src/screens/app/CourtsScreen.js - UPDATED WITH DYNAMIC PRICING & BLACK THEME
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
 import { Text, Card, Button, Chip, ActivityIndicator, Searchbar } from 'react-native-paper';
 import { collection, getDocs, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../constants/firebaseConfig';
-import { Colors } from '../../constants/Colors';
 
 export default function CourtsScreen({ navigation }) {
   const [courts, setCourts] = useState([]);
@@ -88,7 +87,7 @@ export default function CourtsScreen({ navigation }) {
       courtNumber: court.courtNumber || court.name || `Court ${court.id}`,
       pricePerHour: court.pricePerHour || 50,
       facilityName: court.facilityName || 'One Touch Futsal',
-      location: court.location || 'Location not specified'
+      location: court.location || 'Temerloh, Pahang'
     };
     
     console.log('Navigating to BookCourt with:', { courtId: court.id, court: courtData });
@@ -108,9 +107,20 @@ export default function CourtsScreen({ navigation }) {
     }
   };
 
-  const formatPrice = (price) => {
-    if (!price || isNaN(price)) return 'Price not set';
-    return `RM ${price.toFixed(2)}/hour`;
+  // UPDATED: Dynamic pricing display
+  const formatDynamicPricing = () => {
+    return (
+      <View style={styles.pricingContainer}>
+        <View style={styles.pricingRow}>
+          <Text style={styles.normalHoursText}>🌅 Normal Hours (08:00-18:59)</Text>
+          <Text style={styles.normalPriceText}>RM 50/hour</Text>
+        </View>
+        <View style={styles.pricingRow}>
+          <Text style={styles.nightHoursText}>🌙 Night Hours (19:00-02:00)</Text>
+          <Text style={styles.nightPriceText}>RM 80/hour</Text>
+        </View>
+      </View>
+    );
   };
 
   const renderCourtCard = (court) => (
@@ -131,16 +141,19 @@ export default function CourtsScreen({ navigation }) {
           </Chip>
         </View>
         
-        <Text variant="bodyLarge" style={styles.price}>
-          {formatPrice(court.pricePerHour)}
-        </Text>
+        {/* UPDATED: Dynamic pricing display */}
+        {formatDynamicPricing()}
         
         <Text variant="bodySmall" style={styles.facilityInfo}>
           📍 {court.facilityName || 'One Touch Futsal'}
         </Text>
         
         <Text variant="bodySmall" style={styles.facilityInfo}>
-          🌍 {court.location || 'Location not specified'}
+          🌍 {court.location || 'Temerloh, Pahang'}
+        </Text>
+        
+        <Text variant="bodySmall" style={styles.operationalHours}>
+          🕐 Operational Hours: 08:00 - 02:00 (+1 day)
         </Text>
         
         {court.timeSlots && (
@@ -151,7 +164,6 @@ export default function CourtsScreen({ navigation }) {
       </Card.Content>
       
       <Card.Actions style={styles.cardActions}>
-       
         <Button 
           mode="contained" 
           onPress={() => handleBookCourt(court)}
@@ -167,7 +179,7 @@ export default function CourtsScreen({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color="#333333" />
         <Text style={styles.loadingText}>Loading courts...</Text>
       </View>
     );
@@ -175,7 +187,7 @@ export default function CourtsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Facility Header */}
+      {/* Facility Header - Updated with Black Theme */}
       <Card style={styles.facilityCard}>
         <Card.Content>
           <Text variant="titleLarge" style={styles.facilityName}>
@@ -183,6 +195,9 @@ export default function CourtsScreen({ navigation }) {
           </Text>
           <Text variant="bodyMedium" style={styles.facilityLocation}>
             Temerloh, Pahang
+          </Text>
+          <Text variant="bodySmall" style={styles.facilityTagline}>
+            Experience Dynamic Pricing - Better rates during normal hours
           </Text>
         </Card.Content>
       </Card>
@@ -193,6 +208,8 @@ export default function CourtsScreen({ navigation }) {
         onChangeText={setSearchQuery}
         value={searchQuery}
         style={styles.searchBar}
+        inputStyle={styles.searchInput}
+        iconColor="#666"
       />
 
       {/* Courts List */}
@@ -231,38 +248,50 @@ export default function CourtsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#f5f5f5', // Light gray background
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 16,
-    color: Colors.onBackground,
+    color: '#333333',
   },
   facilityCard: {
     margin: 16,
     marginBottom: 8,
     elevation: 3,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#1a1a1a', // Dark card
+    borderRadius: 12,
   },
   facilityName: {
-    color: 'white',
+    color: '#FFFFFF',
     fontWeight: 'bold',
     textAlign: 'center',
   },
   facilityLocation: {
-    color: 'rgba(255,255,255,0.9)',
+    color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
     marginTop: 4,
+  },
+  facilityTagline: {
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   searchBar: {
     margin: 16,
     marginTop: 8,
     elevation: 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+  },
+  searchInput: {
+    color: '#333333',
   },
   scrollView: {
     flex: 1,
@@ -272,17 +301,19 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   title: {
-    color: Colors.primary,
+    color: '#333333',
     fontWeight: 'bold',
   },
   subtitle: {
-    color: Colors.onBackground,
+    color: '#666666',
     marginTop: 4,
   },
   courtCard: {
     marginHorizontal: 16,
     marginBottom: 16,
     elevation: 3,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -293,7 +324,7 @@ const styles = StyleSheet.create({
   courtNumber: {
     flex: 1,
     marginRight: 8,
-    color: Colors.onSurface,
+    color: '#FFFFFF',
     fontWeight: 'bold',
   },
   statusChip: {
@@ -304,43 +335,73 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
-  price: {
-    color: Colors.primary,
-    fontWeight: 'bold',
-    marginBottom: 8,
+  // UPDATED: Dynamic pricing styles
+  pricingContainer: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
   },
-  facilityInfo: {
-    color: Colors.onSurface,
-    opacity: 0.7,
+  pricingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 4,
   },
+  normalHoursText: {
+    color: '#4CAF50',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  normalPriceText: {
+    color: '#4CAF50',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  nightHoursText: {
+    color: '#FF9800',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  nightPriceText: {
+    color: '#FF9800',
+    fontSize: 13,
+    fontWeight: 'bold',
+  },
+  facilityInfo: {
+    color: 'rgba(255,255,255,0.7)',
+    marginBottom: 4,
+  },
+  operationalHours: {
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: 4,
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
   slotsInfo: {
-    color: Colors.onSurface,
-    opacity: 0.7,
+    color: 'rgba(255,255,255,0.7)',
     marginBottom: 8,
   },
   cardActions: {
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
-  detailsButton: {
-    marginRight: 8,
-  },
   bookButton: {
     flex: 1,
+    backgroundColor: '#333333',
+    borderRadius: 8,
   },
   emptyContainer: {
     alignItems: 'center',
     padding: 32,
   },
   emptyText: {
-    color: Colors.onBackground,
+    color: '#333333',
     textAlign: 'center',
     marginBottom: 8,
   },
   emptySubtext: {
-    color: Colors.onBackground,
+    color: '#666666',
     textAlign: 'center',
-    opacity: 0.7,
   },
 });

@@ -6,6 +6,7 @@ import { Card, Text, Button, RadioButton, Chip, ActivityIndicator, Switch } from
 import { Calendar } from 'react-native-calendars';
 import { collection, addDoc, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../constants/firebaseConfig';
+import { TouchableOpacity } from 'react-native';
 
 // 🎾 Import the working matchmaking service
 import { notifyUsersAboutOpponentSearch } from '../../services/matchmakingService';
@@ -33,15 +34,96 @@ const BookCourtScreen = ({ route, navigation }) => {
     '00:00', '01:00', '02:00'
   ];
 
-  // ⏱️ DURATION OPTIONS: Maximum 18 hours (full operational period)
-  const operationalDurationOptions = [
-    { label: '1 Hour', value: 1, price: (courtDetails.pricePerHour || 80) * 1 },
-    { label: '2 Hours', value: 2, price: (courtDetails.pricePerHour || 80) * 2 },
-    { label: '3 Hours', value: 3, price: (courtDetails.pricePerHour || 80) * 3 },
-    { label: '6 Hours', value: 6, price: (courtDetails.pricePerHour || 80) * 6 },
-    { label: '12 Hours', value: 12, price: (courtDetails.pricePerHour || 80) * 12 },
-    { label: '18 Hours (Full Operation)', value: 18, price: (courtDetails.pricePerHour || 80) * 18, highlight: true }
-  ];
+  // 💰 DYNAMIC PRICING FUNCTION - Add this after your state variables
+const getDynamicPriceForTimeSlot = (timeSlot) => {
+  try {
+    if (!timeSlot) return 80;
+    
+    const [hours] = timeSlot.split(':').map(num => parseInt(num));
+    
+    // Normal Hours: 08:00 - 18:59 (RM 50)
+    // Night Hours: 19:00 - 02:00 (RM 80)
+    
+    if (hours >= 8 && hours <= 18) {
+      return 50; // Normal hours pricing
+    } else if (hours >= 19 && hours <= 23) {
+      return 80; // Night hours pricing (same day)
+    } else if (hours >= 0 && hours <= 2) {
+      return 80; // Night hours pricing (next day)
+    }
+    
+    return 80; // fallback
+  } catch (error) {
+    console.error('Error calculating dynamic price:', error);
+    return 80;
+  }
+};
+
+  // Helper function for duration options
+const calculateDynamicTotal = (startTimeSlot, durationValue) => {
+  if (!startTimeSlot || !durationValue) return 0;
+  
+  try {
+    const [startHours] = startTimeSlot.split(':').map(num => parseInt(num));
+    const operationalHours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
+    const startIndex = operationalHours.indexOf(startHours);
+    
+    if (startIndex === -1) return 0;
+    
+    let totalPrice = 0;
+    
+    for (let i = 0; i < durationValue; i++) {
+      const currentIndex = startIndex + i;
+      if (currentIndex >= operationalHours.length) break;
+      
+      const currentHour = operationalHours[currentIndex];
+      const timeSlot = `${currentHour.toString().padStart(2, '0')}:00`;
+      const hourlyPrice = getDynamicPriceForTimeSlot(timeSlot);
+      
+      totalPrice += hourlyPrice;
+    }
+    
+    return totalPrice;
+  } catch (error) {
+    console.error('Error calculating dynamic total:', error);
+    return durationValue * 80;
+  }
+};
+
+ // 4. UPDATE YOUR operationalDurationOptions ARRAY:
+const operationalDurationOptions = [
+  { 
+    label: '1 Hour', 
+    value: 1, 
+    get price() { return calculateTotal(); }
+  },
+  { 
+    label: '2 Hours', 
+    value: 2, 
+    get price() { return selectedTimeSlot ? calculateDynamicTotal(selectedTimeSlot, 2) : 0; }
+  },
+  { 
+    label: '3 Hours', 
+    value: 3, 
+    get price() { return selectedTimeSlot ? calculateDynamicTotal(selectedTimeSlot, 3) : 0; }
+  },
+  { 
+    label: '6 Hours', 
+    value: 6, 
+    get price() { return selectedTimeSlot ? calculateDynamicTotal(selectedTimeSlot, 6) : 0; }
+  },
+  { 
+    label: '12 Hours', 
+    value: 12, 
+    get price() { return selectedTimeSlot ? calculateDynamicTotal(selectedTimeSlot, 12) : 0; }
+  },
+  { 
+    label: '18 Hours (Full Operation)', 
+    value: 18, 
+    get price() { return selectedTimeSlot ? calculateDynamicTotal(selectedTimeSlot, 18) : 0; },
+    highlight: true 
+  }
+];
 
   // 🕐 END TIME CALCULATION: For operational hours sequence
   const calculateEndTime = (timeSlot, duration) => {
@@ -268,12 +350,88 @@ const loadCourtDetails = async () => {
     return isSlotAvailableForDuration(slot, duration, selectedDate, bookedSlots);
   };
 
-  // Calculate total price
-  const calculateTotal = () => {
-    const selectedOption = operationalDurationOptions.find(option => option.value === duration);
-    return selectedOption ? selectedOption.price : 0;
-  };
+  // 3. REPLACE YOUR calculateTotal FUNCTION WITH THIS:
+const calculateTotal = () => {
+  if (!selectedTimeSlot || !duration) return 0;
+  
+  try {
+    const [startHours] = selectedTimeSlot.split(':').map(num => parseInt(num));
+    const operationalHours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
+    const startIndex = operationalHours.indexOf(startHours);
+    
+    if (startIndex === -1) return 0;
+    
+    let totalPrice = 0;
+    
+    // Calculate price for each hour in the booking duration
+    for (let i = 0; i < duration; i++) {
+      const currentIndex = startIndex + i;
+      if (currentIndex >= operationalHours.length) break;
+      
+      const currentHour = operationalHours[currentIndex];
+      const timeSlot = `${currentHour.toString().padStart(2, '0')}:00`;
+      const hourlyPrice = getDynamicPriceForTimeSlot(timeSlot);
+      
+      totalPrice += hourlyPrice;
+    }
+    
+    return totalPrice;
+  } catch (error) {
+    console.error('Error calculating dynamic total:', error);
+    return duration * 80; // fallback
+  }
+};
 
+// 5. COMPLETE PRICING BREAKDOWN COMPONENT (replace the incomplete one):
+const PricingBreakdownDisplay = () => {
+ if (!selectedTimeSlot || !duration) return null;
+  
+  const [startHours] = selectedTimeSlot.split(':').map(num => parseInt(num));
+  const operationalHours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
+  const startIndex = operationalHours.indexOf(startHours);
+  
+  if (startIndex === -1) return null;
+  
+  let normalHours = 0;
+  let nightHours = 0;
+  
+  for (let i = 0; i < duration; i++) {
+    const currentIndex = startIndex + i;
+    if (currentIndex >= operationalHours.length) break;
+    
+    const currentHour = operationalHours[currentIndex];
+    
+    if (currentHour >= 8 && currentHour <= 18) {
+      normalHours++;
+    } else {
+      nightHours++;
+    }
+  }
+  
+  // ADD THIS MISSING RETURN STATEMENT:
+  return (
+    <Card style={styles.card}>
+      <Card.Content>
+        <Text variant="titleMedium" style={styles.sectionTitle}>
+          💰 Pricing Breakdown
+        </Text>
+        {normalHours > 0 && (
+          <Text variant="bodyMedium" style={{ color: '#2E7D32', marginBottom: 4 }}>
+            🌅 Normal Hours (08:00-18:59): {normalHours}h × RM 50 = RM {normalHours * 50}
+          </Text>
+        )}
+        {nightHours > 0 && (
+          <Text variant="bodyMedium" style={{ color: '#E65100', marginBottom: 4 }}>
+            🌙 Night Hours (19:00-02:00): {nightHours}h × RM 80 = RM {nightHours * 80}
+          </Text>
+        )}
+        <Text variant="titleMedium" style={{ color: '#1976D2', fontWeight: 'bold', marginTop: 8 }}>
+          Total: RM {calculateTotal()}
+        </Text>
+      </Card.Content>
+    </Card>
+  );
+};
   // 🔧 CRITICAL FIX: Replace your existing createBooking function with this version:
 
 const createBooking = async () => {
@@ -443,264 +601,274 @@ const createBooking = async () => {
     return maxDate.toISOString().split('T')[0];
   };
 
-  return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        
-        {/* Court Info Header */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="headlineSmall" style={styles.courtTitle}>
-              {courtDetails.courtNumber || 'Court'}
-            </Text>
-            <Text variant="bodyMedium" style={styles.courtPrice}>
-              RM {courtDetails.pricePerHour || 80}/hour
-            </Text>
-            <Text variant="bodySmall" style={styles.operationalHours}>
-              🕐 Operational Hours: 08:00 - 02:00 (next day)
-            </Text>
-            {duration >= 18 && (
-              <Chip mode="outlined" style={styles.fullOperationChip}>
-                🕐 Full Operational Hours
-              </Chip>
-            )}
-          </Card.Content>
-        </Card>
+ // REPLACE YOUR ENTIRE RETURN STATEMENT WITH THIS CORRECTED VERSION:
 
-        {/* Date Selection */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              📅 Select Date
+return (
+  <View style={styles.container}>
+    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+      
+      {/* Court Info Header with Dynamic Pricing */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text variant="headlineSmall" style={styles.courtTitle}>
+            {courtDetails.courtNumber || 'Court'}
+          </Text>
+          
+          {/* Updated pricing display */}
+          <View style={{ marginVertical: 8 }}>
+            <Text variant="bodyMedium" style={{ color: '#2E7D32', marginBottom: 2 }}>
+              🌅 Normal Hours (08:00-18:59): RM 50/hour
             </Text>
-            <Calendar
-              onDayPress={(day) => setSelectedDate(day.dateString)}
-              markedDates={{
-                [selectedDate]: { selected: true, selectedColor: '#2196F3' }
-              }}
-              minDate={getTodayDate()}
-              maxDate={getMaxDate()}
-              theme={{
-                selectedDayBackgroundColor: '#2196F3',
-                todayTextColor: '#2196F3',
-                arrowColor: '#2196F3',
-                textMonthFontWeight: 'bold',
-                textDayHeaderFontWeight: '600',
-              }}
-            />
-            {selectedDate && (
-              <Text style={styles.selectedDateText}>
-                Selected: {formatDate(selectedDate)}
-              </Text>
-            )}
-          </Card.Content>
-        </Card>
+            <Text variant="bodyMedium" style={{ color: '#E65100', marginBottom: 2 }}>
+              🌙 Night Hours (19:00-02:00): RM 80/hour
+            </Text>
+          </View>
+          
+          <Text variant="bodySmall" style={styles.operationalHours}>
+            🕐 Operational Hours: 08:00 - 02:00 (+1 day)
+          </Text>
+        </Card.Content>
+      </Card>
 
-        {/* Duration Selection */}
-        <Card style={styles.card}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              ⏱️ Select Duration
+      {/* Date Selection */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            📅 Select Date
+          </Text>
+          <Calendar
+            onDayPress={(day) => setSelectedDate(day.dateString)}
+            markedDates={{
+              [selectedDate]: { selected: true, selectedColor: '#2196F3' }
+            }}
+            minDate={getTodayDate()}
+            maxDate={getMaxDate()}
+            theme={{
+              selectedDayBackgroundColor: '#2196F3',
+              todayTextColor: '#2196F3',
+              arrowColor: '#2196F3',
+              textMonthFontWeight: 'bold',
+              textDayHeaderFontWeight: '600',
+            }}
+          />
+          {selectedDate && (
+            <Text style={styles.selectedDateText}>
+              Selected: {formatDate(selectedDate)}
             </Text>
-            <Text variant="bodySmall" style={styles.durationNote}>
-              Maximum: 18 hours (full operational period)
-            </Text>
-            <RadioButton.Group
-              onValueChange={value => setDuration(value)}
-              value={duration}
-            >
-              {operationalDurationOptions.map((option) => (
-                <View key={option.value} style={[
-                  styles.radioItem,
-                  option.highlight && styles.highlightedOption
-                ]}>
-                  <RadioButton value={option.value} color="#2196F3" />
-                  <View style={styles.radioContent}>
-                    <Text style={[
-                      styles.radioLabel,
-                      option.highlight && styles.highlightedText
-                    ]}>
-                      {option.label}
-                    </Text>
-                    <Text style={[
-                      styles.radioPrice,
-                      option.highlight && styles.highlightedPrice
-                    ]}>
-                      RM {option.price}
-                    </Text>
-                  </View>
-                  {option.highlight && (
-                    <Chip mode="flat" style={styles.clientRequestChip}>
-                      Client Request
-                    </Chip>
-                  )}
+          )}
+        </Card.Content>
+      </Card>
+
+      {/* Duration Selection */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            ⏱️ Select Duration
+          </Text>
+          <Text variant="bodySmall" style={styles.durationNote}>
+            Maximum: 18 hours (full operational period)
+          </Text>
+          <RadioButton.Group
+            onValueChange={value => setDuration(value)}
+            value={duration}
+          >
+            {operationalDurationOptions.map((option) => (
+              <View key={option.value} style={[
+                styles.radioItem,
+                option.highlight && styles.highlightedOption
+              ]}>
+                <RadioButton value={option.value} color="#2196F3" />
+                <View style={styles.radioContent}>
+                  <Text style={[
+                    styles.radioLabel,
+                    option.highlight && styles.highlightedText
+                  ]}>
+                    {option.label}
+                  </Text>
+                  <Text style={[
+                    styles.radioPrice,
+                    option.highlight && styles.highlightedPrice
+                  ]}>
+                    RM {option.price}
+                  </Text>
                 </View>
-              ))}
-            </RadioButton.Group>
+                {option.highlight && (
+                  <Chip mode="flat" style={styles.clientRequestChip}>
+                    Client Request
+                  </Chip>
+                )}
+              </View>
+            ))}
+          </RadioButton.Group>
+          
+          {selectedTimeSlot && duration > 1 && (
+            <View style={styles.timeDisplay}>
+              <Text style={styles.timeDisplayText}>
+                📍 {selectedTimeSlot} → {calculateEndTime(selectedTimeSlot, duration)}
+              </Text>
+            </View>
+          )}
+        </Card.Content>
+      </Card>
+
+      {/* Time Slot Selection */}
+{selectedDate && (
+  <Card style={styles.card}>
+    <Card.Content>
+      <Text variant="titleMedium" style={styles.sectionTitle}>
+        🕐 Available Time Slots
+      </Text>
+      <Text variant="bodySmall" style={styles.dateText}>
+        {formatDate(selectedDate)} • {duration} hour{duration > 1 ? 's' : ''}
+      </Text>
+      <Text variant="bodySmall" style={styles.hoursInfo}>
+        Regular Hours: 08:00-23:00 | Early Morning: 00:00-02:00 🌙
+      </Text>
+      
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2196F3" />
+          <Text style={styles.loadingText}>Checking availability...</Text>
+        </View>
+      ) : (
+        <View style={styles.timeSlotsContainer}>
+          {operationalTimeSlots.map((slot) => {
+            const isAvailable = isSlotAvailable(slot);
+            const isSelected = selectedTimeSlot === slot;
+            const hourlyPrice = getDynamicPriceForTimeSlot(slot);
+            const isPeakHour = hourlyPrice === 80;
             
-            {selectedTimeSlot && duration > 1 && (
-              <View style={styles.timeDisplay}>
-                <Text style={styles.timeDisplayText}>
-                  📍 {selectedTimeSlot} → {calculateEndTime(selectedTimeSlot, duration)}
+            return (
+              <Chip
+                key={slot}
+                mode={isSelected ? 'flat' : 'outlined'}
+                selected={isSelected}
+                onPress={() => isAvailable && setSelectedTimeSlot(slot)}
+                disabled={!isAvailable}
+                style={[
+                  styles.timeSlotChip,
+                  isSelected && styles.selectedChip,
+                  !isAvailable && styles.unavailableChip,
+                  isPeakHour && !isSelected && styles.peakHourChip
+                ]}
+                textStyle={[
+                  styles.timeSlotText,
+                  isSelected && styles.selectedTimeSlotText,
+                  !isAvailable && styles.unavailableText
+                ]}
+              >
+                {slot}
+              </Chip>
+            );
+          })}
+        </View>
+      )}
+    </Card.Content>
+  </Card>
+)}
+
+      {/* Opponent Search / Matchmaking */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <Text variant="titleMedium" style={styles.sectionTitle}>
+            ⚽ Find Playing Partner
+          </Text>
+          <Text variant="bodySmall" style={styles.matchmakingNote}>
+            Would you like us to notify other players that you're looking for an opponent?
+          </Text>
+          
+          <View style={styles.matchmakingContainer}>
+            <View style={styles.matchmakingOption}>
+              <View>
+                <Text style={styles.matchmakingLabel}>Search for Opponent</Text>
+                <Text style={styles.matchmakingDescription}>
+                  We'll notify other players about your booking
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ marginRight: 8, color: needOpponent ? '#2196F3' : '#888', fontWeight: 'bold' }}>
+                  {needOpponent ? 'Yes' : 'No'}
+                </Text>
+                <Switch
+                  value={needOpponent}
+                  onValueChange={setNeedOpponent}
+                  color="#2196F3"
+                />
+              </View>
+            </View>
+            
+            {needOpponent && (
+              <View style={styles.matchmakingInfo}>
+                <Text style={styles.matchmakingInfoText}>
+                  ✅ Other players will be notified when you confirm this booking
+                </Text>
+                <Text style={styles.matchmakingBenefit}>
+                  🎯 87% of players find it helpful to connect with opponents
                 </Text>
               </View>
             )}
-          </Card.Content>
-        </Card>
+          </View>
+        </Card.Content>
+      </Card>
 
-        {/* Opponent Search / Matchmaking */}
+      {/* ADD PRICING BREAKDOWN HERE - Only show when time slot and duration are selected */}
+      {selectedTimeSlot && duration && <PricingBreakdownDisplay />}
+
+
+      {/* Confirm Booking Button */}
+      {selectedDate && selectedTimeSlot && (
         <Card style={styles.card}>
           <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              ⚽ Find Playing Partner
-            </Text>
-            <Text variant="bodySmall" style={styles.matchmakingNote}>
-              Would you like us to notify other players that you're looking for an opponent?
-            </Text>
-            
-            <View style={styles.matchmakingContainer}>
-              <View style={styles.matchmakingOption}>
-                <View>
-                  <Text style={styles.matchmakingLabel}>Search for Opponent</Text>
-                  <Text style={styles.matchmakingDescription}>
-                    We'll notify other players about your booking
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={{ marginRight: 8, color: needOpponent ? '#2196F3' : '#888', fontWeight: 'bold' }}>
-                    {needOpponent ? 'Yes' : 'No'}
-                  </Text>
-                  <Switch
-                    value={needOpponent}
-                    onValueChange={setNeedOpponent}
-                    color="#2196F3" // Use your theme primary color
-                  />
-                </View>
-              </View>
+            <View style={styles.summaryContainer}>
+              <Text variant="titleMedium" style={styles.summaryTitle}>
+                📋 Booking Summary
+              </Text>
+              <Text style={styles.summaryText}>
+                Court: {courtDetails.courtNumber}
+              </Text>
+              <Text style={styles.summaryText}>
+                Date: {formatDate(selectedDate)}
+              </Text>
+              <Text style={styles.summaryText}>
+                Time: {selectedTimeSlot} - {calculateEndTime(selectedTimeSlot, duration)}
+              </Text>
+              <Text style={styles.summaryText}>
+                Duration: {duration} hour{duration > 1 ? 's' : ''}
+              </Text>
+              <Text style={[styles.summaryText, styles.totalPrice]}>
+                Total: RM {calculateTotal()}
+              </Text>
               
               {needOpponent && (
-                <View style={styles.matchmakingInfo}>
-                  <Text style={styles.matchmakingInfoText}>
-                    ✅ Other players will be notified when you confirm this booking
-                  </Text>
-                  <Text style={styles.matchmakingBenefit}>
-                    🎯 87% of players find it helpful to connect with opponents
-                  </Text>
-                </View>
+                <Text style={styles.matchmakingStatus}>
+                  ⚽ Looking for playing partner - other players will be notified
+                </Text>
+              )}
+              
+              {duration >= 18 && (
+                <Text style={styles.fullOperationNote}>
+                  🕐 This booking covers our full operational hours (08:00 - 02:00)
+                </Text>
               )}
             </View>
+            
+            <Button
+              mode="contained"
+              onPress={createBooking}
+              loading={loading}
+              disabled={loading}
+              style={styles.confirmButton}
+              contentStyle={styles.confirmButtonContent}
+            >
+              {loading ? 'Processing...' : 'Confirm Booking ✅'}
+            </Button>
           </Card.Content>
         </Card>
-
-        {/* Time Slot Selection */}
-        {selectedDate && (
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text variant="titleMedium" style={styles.sectionTitle}>
-                🕐 Available Time Slots
-              </Text>
-              <Text variant="bodySmall" style={styles.dateText}>
-                {formatDate(selectedDate)} • {duration} hour{duration > 1 ? 's' : ''}
-              </Text>
-              <Text variant="bodySmall" style={styles.hoursInfo}>
-                Regular Hours: 08:00-23:00 | Early Morning: 00:00-02:00 🌙
-              </Text>
-              
-              {loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#2196F3" />
-                  <Text style={styles.loadingText}>Checking availability...</Text>
-                </View>
-              ) : (
-                <View style={styles.timeSlotsContainer}>
-                  {operationalTimeSlots.map((slot) => {
-                    const available = isSlotAvailable(slot);
-                    const isSelected = selectedTimeSlot === slot;
-                    const isEarlyMorningSlot = ['00:00', '01:00', '02:00'].includes(slot);
-                    
-                    return (
-                      <Chip
-                        key={slot}
-                        mode={isSelected ? 'flat' : 'outlined'}
-                        selected={isSelected}
-                        disabled={!available}
-                        onPress={() => available && setSelectedTimeSlot(slot)}
-                        style={[
-                          styles.timeSlotChip,
-                          isSelected && styles.selectedChip,
-                          !available && styles.disabledChip,
-                          isEarlyMorningSlot && styles.earlyMorningSlot
-                        ]}
-                        textStyle={[
-                          styles.timeSlotText,
-                          !available && styles.disabledText,
-                          isEarlyMorningSlot && styles.earlyMorningText
-                        ]}
-                      >
-                        {slot} {isEarlyMorningSlot && '🌙'}
-                      </Chip>
-                    );
-                  })}
-                </View>
-              )}
-            </Card.Content>
-          </Card>
-        )}
-
-        {/* Confirm Booking Button */}
-        {selectedDate && selectedTimeSlot && (
-          <Card style={styles.card}>
-            <Card.Content>
-              <View style={styles.summaryContainer}>
-                <Text variant="titleMedium" style={styles.summaryTitle}>
-                  📋 Booking Summary
-                </Text>
-                <Text style={styles.summaryText}>
-                  Court: {courtDetails.courtNumber}
-                </Text>
-                <Text style={styles.summaryText}>
-                  Date: {formatDate(selectedDate)}
-                </Text>
-                <Text style={styles.summaryText}>
-                  Time: {selectedTimeSlot} - {calculateEndTime(selectedTimeSlot, duration)}
-                </Text>
-                <Text style={styles.summaryText}>
-                  Duration: {duration} hour{duration > 1 ? 's' : ''}
-                </Text>
-                <Text style={[styles.summaryText, styles.totalPrice]}>
-                  Total: RM {calculateTotal()}
-                </Text>
-                
-                {needOpponent && (
-                  <Text style={styles.matchmakingStatus}>
-                    ⚽ Looking for playing partner - other players will be notified
-                  </Text>
-                )}
-                
-                {duration >= 18 && (
-                  <Text style={styles.fullOperationNote}>
-                    🕐 This booking covers our full operational hours (08:00 - 02:00)
-                  </Text>
-                )}
-              </View>
-              
-              <Button
-                mode="contained"
-                onPress={createBooking}
-                loading={loading}
-                disabled={loading}
-                style={styles.confirmButton}
-                contentStyle={styles.confirmButtonContent}
-              >
-                {loading ? 'Processing...' : 'Confirm Booking ✅'}
-              </Button>
-            </Card.Content>
-          </Card>
-        )}
-        
-      </ScrollView>
-    </View>
-  );
+      )}
+      
+    </ScrollView>
+  </View>
+);
 };
 
 const styles = StyleSheet.create({
@@ -943,6 +1111,16 @@ const styles = StyleSheet.create({
   confirmButtonContent: {
     paddingVertical: 8,
   },
+  priceLabel: {
+  fontSize: 10,
+  color: '#666',
+  marginTop: 2,
+  textAlign: 'center',
+},
+sectionTitle: {
+  marginBottom: 12,
+  fontWeight: 'bold',
+},
 });
 
 export default BookCourtScreen;
