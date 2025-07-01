@@ -1,5 +1,5 @@
 // src/screens/app/NotificationsScreen.js
-// Enhanced notifications system with BOTH court admin approval AND matchmaking features
+// FIXED: Complete matchmaking details in notifications
 
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native';
@@ -14,7 +14,7 @@ import {
 import { auth, db } from '../../constants/firebaseConfig';
 import { Colors } from '../../constants/Colors';
 
-// IMPORT matchmaking service for opponent search responses
+// Import matchmaking service for opponent search responses
 import { respondToOpponentSearch } from '../../services/matchmakingService';
 
 export default function NotificationsScreen({ navigation }) {
@@ -67,7 +67,6 @@ export default function NotificationsScreen({ navigation }) {
         readAt: new Date()
       });
       
-      // Local state update handled by real-time listener
       console.log('✅ Notification marked as read');
     } catch (error) {
       console.error('Error marking notification as read:', error);
@@ -100,11 +99,36 @@ export default function NotificationsScreen({ navigation }) {
     }
   };
 
-  // NEW: Handle opponent search responses
+  // 🔧 FIXED: Enhanced opponent response with complete details
   const handleOpponentResponse = async (notification) => {
+    // Format the date nicely
+    const formatDate = (dateString) => {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-MY', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    };
+
+    // Calculate duration display
+    const getDurationText = (duration) => {
+      if (!duration) return "Duration not specified";
+      return duration === 1 ? "1 hour" : `${duration} hours`;
+    };
+
+    // 🎯 COMPLETE ALERT with all details
+    const alertMessage = `Do you want to play with ${notification.searchingUserName}?
+
+📍 Court: ${notification.courtName || 'Not specified'}
+📅 Date: ${formatDate(notification.date) || 'Not specified'}
+⏰ Time: ${notification.timeSlot || 'Not specified'}
+⏱️ Duration: ${getDurationText(notification.duration)}`;
+
     Alert.alert(
       '⚽ Join Game?',
-      `Do you want to play with ${notification.searchingUserName}?\n\nCourt: ${notification.courtName}\nTime: ${notification.timeSlot}`,
+      alertMessage,
       [
         { text: 'Maybe Later', style: 'cancel' },
         { 
@@ -157,7 +181,7 @@ export default function NotificationsScreen({ navigation }) {
     }
   };
 
-  // ENHANCED: Support both booking updates AND matchmaking notifications
+  // Enhanced notification icons for different types
   const getNotificationIcon = (type, status) => {
     // Existing booking update icons
     if (type === 'booking_update') {
@@ -169,14 +193,14 @@ export default function NotificationsScreen({ navigation }) {
       }
     }
     
-    // NEW: Matchmaking notification icons
+    // Matchmaking notification icons
     if (type === 'opponent_search') return '⚽';
     if (type === 'match_response') return '🤝';
     
     return '📢';
   };
 
-  // ENHANCED: Support both booking updates AND matchmaking notifications
+  // Enhanced notification colors for different types
   const getNotificationColor = (type, status) => {
     // Existing booking update colors
     if (type === 'booking_update') {
@@ -188,7 +212,7 @@ export default function NotificationsScreen({ navigation }) {
       }
     }
     
-    // NEW: Matchmaking notification colors
+    // Matchmaking notification colors
     if (type === 'opponent_search') return '#FF6B35';
     if (type === 'match_response') return '#4CAF50';
     
@@ -200,73 +224,49 @@ export default function NotificationsScreen({ navigation }) {
     
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
     
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    
-    return date.toLocaleDateString('en-MY', { 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return `${Math.floor(diffInMinutes / 1440)}d ago`;
   };
 
-  const renderNotificationCard = (notification) => {
-    const isUnread = !notification.read;
-    const status = notification.data?.status;
-    
+  // Render individual notification card
+  const renderNotification = (notification) => {
+    const cardStyle = [
+      styles.notificationCard,
+      !notification.read && styles.unreadCard
+    ];
+
     return (
-      <Card 
-        key={notification.id} 
-        style={[
-          styles.notificationCard,
-          isUnread && styles.unreadCard
-        ]}
-        onPress={() => handleNotificationPress(notification)}
-      >
+      <Card key={notification.id} style={cardStyle}>
         <Card.Content>
           <View style={styles.notificationHeader}>
-            <View style={styles.notificationMain}>
-              <View style={styles.iconContainer}>
-                <Text style={[
-                  styles.notificationIcon,
-                  { color: getNotificationColor(notification.type, status) }
-                ]}>
-                  {getNotificationIcon(notification.type, status)}
-                </Text>
-                {isUnread && <Badge style={styles.unreadBadge} />}
-              </View>
-              
-              <View style={styles.notificationContent}>
-                <Text 
-                  variant="titleSmall" 
-                  style={[
-                    styles.notificationTitle,
-                    isUnread && styles.unreadText
-                  ]}
-                >
-                  {notification.title}
-                </Text>
-                <Text 
-                  variant="bodyMedium" 
-                  style={styles.notificationMessage}
-                >
-                  {notification.message}
-                </Text>
-                <Text 
-                  variant="bodySmall" 
-                  style={styles.notificationTime}
-                >
-                  {formatTime(notification.createdAt)}
-                </Text>
-              </View>
+            <View style={styles.avatarContainer}>
+              <Avatar.Text 
+                size={40} 
+                label={getNotificationIcon(notification.type, notification.status)}
+                style={[
+                  styles.avatar, 
+                  { backgroundColor: getNotificationColor(notification.type, notification.status) }
+                ]}
+              />
+              {!notification.read && (
+                <View style={styles.unreadDot} />
+              )}
+            </View>
+            
+            <View style={styles.notificationContent}>
+              <Text variant="bodyMedium" style={styles.notificationTitle}>
+                {notification.title}
+              </Text>
+              <Text variant="bodySmall" style={styles.notificationMessage}>
+                {notification.message}
+              </Text>
+              <Text variant="bodySmall" style={styles.timeText}>
+                {formatTime(notification.createdAt)}
+              </Text>
             </View>
             
             <IconButton
@@ -276,19 +276,18 @@ export default function NotificationsScreen({ navigation }) {
               style={styles.deleteButton}
             />
           </View>
-          
-          {/* NEW: Opponent Search Response Buttons */}
+
+          {/* 🎾 ENHANCED: Matchmaking action buttons */}
           {notification.type === 'opponent_search' && !notification.responded && (
             <View style={styles.actionButtons}>
               <Button
                 mode="contained"
                 onPress={() => handleOpponentResponse(notification)}
-                style={styles.respondButton}
+                style={styles.interestButton}
+                disabled={processingResponse === notification.id}
                 loading={processingResponse === notification.id}
-                disabled={processingResponse !== null}
-                icon="soccer"
               >
-                I'm Interested! ⚽
+                ⚽ I'm Interested!
               </Button>
               
               <Button
@@ -311,17 +310,20 @@ export default function NotificationsScreen({ navigation }) {
             </View>
           )}
           
-          {/* EXISTING: Additional booking info for court admin approvals */}
-          {notification.data && (
+          {/* 🔧 ENHANCED: Show booking details for all notifications */}
+          {(notification.courtName || notification.date || notification.timeSlot) && (
             <View style={styles.additionalInfo}>
               <Divider style={styles.divider} />
               <Text variant="bodySmall" style={styles.bookingInfo}>
-                📍 {notification.data.courtName || notification.courtName} • 📅 {notification.data.date || notification.date} • ⏰ {notification.data.timeSlot || notification.timeSlot}
+                📍 {notification.courtName || notification.data?.courtName || 'Court'} • 
+                📅 {notification.date || notification.data?.date || 'Date TBD'} • 
+                ⏰ {notification.timeSlot || notification.data?.timeSlot || 'Time TBD'}
+                {notification.duration && ` • ⏱️ ${notification.duration === 1 ? '1 hour' : `${notification.duration} hours`}`}
               </Text>
             </View>
           )}
 
-          {/* NEW: Matchmaking specific info */}
+          {/* Matchmaking specific info */}
           {(notification.type === 'opponent_search' || notification.type === 'match_response') && (
             <View style={styles.matchDetails}>
               {notification.type === 'match_response' && (
@@ -376,27 +378,15 @@ export default function NotificationsScreen({ navigation }) {
         }
       >
         {notifications.length > 0 ? (
-          <View style={styles.notificationsList}>
-            {notifications.map(renderNotificationCard)}
-          </View>
+          notifications.map(renderNotification)
         ) : (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>🔔</Text>
-            <Text variant="titleMedium" style={styles.emptyTitle}>
-              No notifications yet
+            <Text variant="bodyLarge" style={styles.emptyText}>
+              📭 No notifications yet
             </Text>
-            <Text variant="bodyMedium" style={styles.emptySubtitle}>
-              You'll receive notifications for booking approvals and opponent searches
+            <Text variant="bodyMedium" style={styles.emptySubtext}>
+              You'll see booking updates and match invitations here
             </Text>
-            
-            <Button
-              mode="outlined"
-              onPress={() => navigation.navigate('Courts')}
-              style={styles.testButton}
-              icon="tennis"
-            >
-              Book a Court to Test
-            </Button>
           </View>
         )}
       </ScrollView>
@@ -414,7 +404,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
@@ -425,28 +415,19 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: 'bold',
-    marginRight: 8,
+    color: Colors.primary,
   },
   headerBadge: {
-    backgroundColor: Colors.primary,
+    marginLeft: 8,
+    backgroundColor: '#FF5722',
   },
   markAllButton: {
     borderColor: Colors.primary,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    color: '#666',
-  },
   scrollView: {
     flex: 1,
-  },
-  notificationsList: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   notificationCard: {
     marginBottom: 12,
@@ -456,120 +437,111 @@ const styles = StyleSheet.create({
   unreadCard: {
     borderLeftWidth: 4,
     borderLeftColor: Colors.primary,
-    backgroundColor: '#f8f9ff',
   },
   notificationHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  notificationMain: {
-    flexDirection: 'row',
-    flex: 1,
-  },
-  iconContainer: {
+  avatarContainer: {
     position: 'relative',
     marginRight: 12,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
   },
-  notificationIcon: {
-    fontSize: 24,
+  avatar: {
+    // Avatar styles handled by component
   },
-  unreadBadge: {
+  unreadDot: {
     position: 'absolute',
     top: -2,
     right: -2,
-    width: 8,
-    height: 8,
-    backgroundColor: Colors.primary,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#FF5722',
+    borderWidth: 2,
+    borderColor: 'white',
   },
   notificationContent: {
     flex: 1,
   },
   notificationTitle: {
-    fontWeight: 'bold',
+    fontWeight: '600',
     marginBottom: 4,
-  },
-  unreadText: {
-    color: Colors.primary,
+    color: '#333',
   },
   notificationMessage: {
-    marginBottom: 4,
-    lineHeight: 20,
-  },
-  notificationTime: {
     color: '#666',
+    lineHeight: 18,
+  },
+  timeText: {
+    color: '#999',
+    marginTop: 4,
   },
   deleteButton: {
     margin: 0,
   },
-  
-  // NEW: Matchmaking specific styles
   actionButtons: {
     flexDirection: 'row',
-    gap: 8,
     marginTop: 12,
+    gap: 8,
   },
-  respondButton: {
+  interestButton: {
     flex: 1,
-    backgroundColor: '#4caf50',
+    backgroundColor: Colors.primary,
   },
   dismissButton: {
     flex: 1,
+    borderColor: '#999',
   },
   responseStatus: {
     marginTop: 8,
   },
   respondedChip: {
+    backgroundColor: '#E8F5E8',
     alignSelf: 'flex-start',
-    backgroundColor: '#e8f5e8',
   },
   respondedText: {
-    color: '#2e7d32',
+    color: '#4CAF50',
+    fontSize: 12,
   },
-  matchDetails: {
-    marginTop: 8,
-  },
-  matchInfo: {
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  
-  // EXISTING: Court admin styles
   additionalInfo: {
     marginTop: 8,
   },
   divider: {
-    marginVertical: 8,
+    marginBottom: 8,
   },
   bookingInfo: {
     color: '#666',
     fontStyle: 'italic',
   },
+  matchDetails: {
+    marginTop: 8,
+  },
+  matchInfo: {
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#666',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 100,
-    paddingHorizontal: 32,
+    paddingVertical: 40,
   },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-    opacity: 0.5,
-  },
-  emptyTitle: {
-    textAlign: 'center',
-    marginBottom: 8,
-    fontWeight: 'bold',
-  },
-  emptySubtitle: {
-    textAlign: 'center',
+  emptyText: {
     color: '#666',
-    lineHeight: 20,
-    marginBottom: 24,
+    marginBottom: 8,
   },
-  testButton: {
-    borderColor: Colors.primary,
+  emptySubtext: {
+    color: '#999',
+    textAlign: 'center',
   },
 });

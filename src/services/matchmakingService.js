@@ -1,5 +1,5 @@
 // src/services/matchmakingService.js
-// Complete matchmaking service for One Touch App
+// FIXED: Include duration and complete booking details in notifications
 
 import { 
   collection, 
@@ -7,23 +7,21 @@ import {
   query, 
   where, 
   getDocs, 
-  updateDoc, 
-  doc,
-  deleteDoc,
-  orderBy,
-  limit
+  doc, 
+  updateDoc,
+  limit,
+  orderBy 
 } from 'firebase/firestore';
 import { db } from '../constants/firebaseConfig';
 
 /**
- * Notify all users (except the searching user) about opponent search
- * This is called when someone books a court with "Find Opponent = Yes"
+ * 🔧 FIXED: Send opponent search notifications with COMPLETE details
+ * Now includes: court, date, time, duration, and all booking info
  */
-export const notifyUsersAboutOpponentSearch = async (bookingData, searchingUser) => {
+export const sendOpponentSearchNotifications = async (bookingData, searchingUser) => {
   try {
-    console.log('🎾 Notifying users about opponent search...');
-    console.log('Booking data:', bookingData);
-    console.log('Searching user:', searchingUser.email);
+    console.log('🎾 Sending opponent search notifications...');
+    console.log('📋 Booking data:', bookingData);
     
     // Get all users except the searching user
     const usersQuery = query(
@@ -32,68 +30,77 @@ export const notifyUsersAboutOpponentSearch = async (bookingData, searchingUser)
     );
     
     const usersSnapshot = await getDocs(usersQuery);
+    console.log(`📬 Found ${usersSnapshot.docs.length} users to notify`);
     
-    if (usersSnapshot.empty) {
-      console.log('ℹ️ No other users found to notify');
-      // For demo purposes, create a notification for the same user
+    // If no other users exist, create a demo notification for testing
+    if (usersSnapshot.docs.length === 0) {
+      console.log('⚠️ No other users found - creating demo notification for testing');
       await createDemoNotification(bookingData, searchingUser);
       return;
     }
     
-    // Create notifications for all users
+    // Create notifications for all users with COMPLETE information
     const notificationPromises = usersSnapshot.docs.map(userDoc => {
       const userData = userDoc.data();
-      return addDoc(collection(db, 'notifications'), {
+      
+      // 🔧 ENHANCED: Complete notification with all details
+      const notificationData = {
         userId: userData.uid,
         type: 'opponent_search',
-        title: ' Looking for Opponent!',
-        message: `${searchingUser.displayName || searchingUser.email} is looking for a playing partner at ${bookingData.courtName}`,
+        title: '⚽ Looking for Opponent!',
+        message: `${searchingUser.displayName || searchingUser.email} is looking for a playing partner at ${bookingData.courtName} on ${bookingData.date} at ${bookingData.timeSlot}`,
         
-        // Match data
+        // 🎯 COMPLETE match data including duration
         searchingUserId: searchingUser.uid,
         searchingUserName: searchingUser.displayName || searchingUser.email,
-        courtName: bookingData.courtName,
+        courtName: bookingData.courtName || bookingData.courtNumber || 'Court',
         date: bookingData.date,
         timeSlot: bookingData.timeSlot,
+        duration: bookingData.duration || 1, // 🔧 FIXED: Include duration
         
-        // Additional booking info
-        bookingId: bookingData.bookingId || null,
+        // Additional booking details
+        totalAmount: bookingData.totalAmount,
+        pricePerHour: bookingData.pricePerHour,
+        facilityName: bookingData.facilityName,
+        bookingId: bookingData.bookingId, // If available
         
-        // Status
+        // Status tracking
         read: false,
         responded: false,
         createdAt: new Date()
-      });
+      };
+      
+      console.log('📩 Creating notification:', notificationData);
+      return addDoc(collection(db, 'notifications'), notificationData);
     });
     
     await Promise.all(notificationPromises);
-    
-    console.log(`✅ Opponent search notifications sent to ${usersSnapshot.docs.length} users`);
+    console.log('✅ Opponent search notifications sent to all users');
     
   } catch (error) {
-    console.error('❌ Error sending opponent search notifications:', error);
-    throw error; // Re-throw to handle in calling function
+    console.error('❌ Error sending notifications:', error);
   }
 };
 
 /**
- * Create a demo notification for testing purposes (when no other users exist)
+ * Create a demo notification for testing when no other users exist
  */
 const createDemoNotification = async (bookingData, searchingUser) => {
   try {
-    // Create a notification for the same user (for demo/testing)
+    // Create a demo notification for the searching user to test the UI
     await addDoc(collection(db, 'notifications'), {
       userId: searchingUser.uid,
       type: 'opponent_search',
-      title: '🎾 Demo: Someone Looking for Opponent!',
+      title: '⚽ Looking for Opponent! (Demo)',
       message: `Demo Player is looking for a playing partner at ${bookingData.courtName} (This is a demo notification since no other users exist)`,
       
-      // Match data
+      // Complete match data for demo
       searchingUserId: 'demo-user-123',
       searchingUserName: 'Demo Player',
-      courtName: bookingData.courtName,
+      courtName: bookingData.courtName || bookingData.courtNumber || 'Court',
       date: bookingData.date,
       timeSlot: bookingData.timeSlot,
+      duration: bookingData.duration || 1,
       
       // Status
       read: false,
@@ -174,6 +181,7 @@ export const createMatch = async (searchingUserId, respondingUserId, bookingData
       courtName: bookingData.courtName,
       date: bookingData.date,
       timeSlot: bookingData.timeSlot,
+      duration: bookingData.duration,
       status: 'pending_confirmation',
       createdAt: new Date(),
       
@@ -279,48 +287,21 @@ export const cancelOpponentSearch = async (bookingId) => {
 };
 
 /**
- * Delete old notifications (cleanup utility)
+ * Get match history for a user
  */
-export const cleanupOldNotifications = async (userId, daysOld = 30) => {
+export const getUserMatches = async (userId) => {
   try {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
-    
-    const oldNotificationsQuery = query(
-      collection(db, 'notifications'),
-      where('userId', '==', userId),
-      where('createdAt', '<', cutoffDate)
-    );
-    
-    const snapshot = await getDocs(oldNotificationsQuery);
-    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
-    
-    await Promise.all(deletePromises);
-    
-    console.log(`🧹 Cleaned up ${snapshot.docs.length} old notifications`);
-    return { success: true, deletedCount: snapshot.docs.length };
-    
-  } catch (error) {
-    console.error('❌ Error cleaning up notifications:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-/**
- * Get match statistics for a user
- */
-export const getUserMatchStats = async (userId) => {
-  try {
-    // Get matches where user was searching for opponent
+    // Get matches where user is either searching or responding
     const searchingQuery = query(
       collection(db, 'matches'),
-      where('searchingUserId', '==', userId)
+      where('searchingUserId', '==', userId),
+      orderBy('createdAt', 'desc')
     );
     
-    // Get matches where user responded to search
     const respondingQuery = query(
       collection(db, 'matches'),
-      where('respondingUserId', '==', userId)
+      where('respondingUserId', '==', userId),
+      orderBy('createdAt', 'desc')
     );
     
     const [searchingSnapshot, respondingSnapshot] = await Promise.all([
@@ -328,65 +309,22 @@ export const getUserMatchStats = async (userId) => {
       getDocs(respondingQuery)
     ]);
     
-    const stats = {
-      totalMatches: searchingSnapshot.docs.length + respondingSnapshot.docs.length,
-      matchesInitiated: searchingSnapshot.docs.length,
-      matchesResponded: respondingSnapshot.docs.length,
-      recentMatches: []
-    };
-    
-    // Combine and sort recent matches
-    const allMatches = [
-      ...searchingSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'searcher' })),
-      ...respondingSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'responder' }))
+    const matches = [
+      ...searchingSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'searching' })),
+      ...respondingSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), role: 'responding' }))
     ];
     
-    stats.recentMatches = allMatches
-      .sort((a, b) => b.createdAt?.toDate() - a.createdAt?.toDate())
-      .slice(0, 5);
+    // Sort by creation date
+    matches.sort((a, b) => b.createdAt?.toDate() - a.createdAt?.toDate());
     
-    return stats;
+    console.log(`🏆 Retrieved ${matches.length} matches for user`);
+    return matches;
     
   } catch (error) {
-    console.error('❌ Error getting match stats:', error);
-    return {
-      totalMatches: 0,
-      matchesInitiated: 0,
-      matchesResponded: 0,
-      recentMatches: []
-    };
+    console.error('❌ Error getting user matches:', error);
+    return [];
   }
 };
 
-/**
- * Check if user has any active opponent searches
- */
-export const hasActiveOpponentSearch = async (userId) => {
-  try {
-    const activeSearchQuery = query(
-      collection(db, 'bookings'),
-      where('userId', '==', userId),
-      where('searchingForOpponent', '==', true),
-      where('opponentFound', '==', false)
-    );
-    
-    const snapshot = await getDocs(activeSearchQuery);
-    return snapshot.docs.length > 0;
-    
-  } catch (error) {
-    console.error('❌ Error checking active searches:', error);
-    return false;
-  }
-};
-
-// Export all functions
-export default {
-  notifyUsersAboutOpponentSearch,
-  respondToOpponentSearch,
-  createMatch,
-  getUserOpponentNotifications,
-  cancelOpponentSearch,
-  cleanupOldNotifications,
-  getUserMatchStats,
-  hasActiveOpponentSearch
-};
+// 🔧 CRITICAL FIX: Export the function name that BookCourtScreen expects
+export const notifyUsersAboutOpponentSearch = sendOpponentSearchNotifications;
