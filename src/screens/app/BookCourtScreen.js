@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Alert, Platform, StyleSheet } from 'react-native';
-import { Card, Text, Button, RadioButton, Chip, ActivityIndicator } from 'react-native-paper';
+import { Card, Text, Button, RadioButton, Chip, ActivityIndicator, Switch } from 'react-native-paper';
 import { Calendar } from 'react-native-calendars';
 import { collection, addDoc, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../constants/firebaseConfig';
@@ -514,17 +514,16 @@ const BookCourtScreen = ({ route, navigation }) => {
                     We'll notify other players about your booking
                   </Text>
                 </View>
-                <Button
-                  mode={needOpponent ? "contained" : "outlined"}
-                  onPress={() => setNeedOpponent(!needOpponent)}
-                  style={[
-                    styles.matchmakingButton,
-                    needOpponent && styles.matchmakingButtonActive
-                  ]}
-                  compact
-                >
-                  {needOpponent ? "Yes, Find Partner!" : "No Thanks"}
-                </Button>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ marginRight: 8, color: needOpponent ? '#2196F3' : '#888', fontWeight: 'bold' }}>
+                    {needOpponent ? 'Yes' : 'No'}
+                  </Text>
+                  <Switch
+                    value={needOpponent}
+                    onValueChange={setNeedOpponent}
+                    color="#2196F3" // Use your theme primary color
+                  />
+                </View>
               </View>
               
               {needOpponent && (
