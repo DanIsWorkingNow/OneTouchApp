@@ -1,23 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  ScrollView,
+import { 
+  View, 
+  ScrollView, 
+  StyleSheet, 
   Alert,
-  RefreshControl,
+  RefreshControl 
 } from 'react-native';
 import {
   Text,
   Card,
   Chip,
-  Button,
   FAB,
-  Divider,
-  Badge,
   Surface,
+  Badge,
+  Button,
+  Divider
 } from 'react-native-paper';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../constants/firebaseConfig';
 import { 
   collection, 
@@ -27,98 +26,63 @@ import {
   onSnapshot,
   limit
 } from 'firebase/firestore';
+import { useAuth } from '../../contexts/AuthContext';
 import { Colors } from '../../constants/Colors';
+
+const filterOptions = [
+  { label: 'All', value: 'all' },
+  { label: 'New', value: 'new' },
+  { label: 'In Progress', value: 'in-progress' },
+  { label: 'Resolved', value: 'resolved' },
+];
 
 export default function MyFeedbackScreen({ navigation }) {
   const { user } = useAuth();
-  
   const [myFeedback, setMyFeedback] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState('all');
 
-  const filterOptions = [
-    { value: 'all', label: 'All Feedback' },
-    { value: 'new', label: 'New' },
-    { value: 'in-progress', label: 'In Progress' },
-    { value: 'resolved', label: 'Resolved' },
-    { value: 'closed', label: 'Closed' },
-  ];
-
-  // Set up real-time listener
   useEffect(() => {
     if (!user?.uid) return;
 
-    setLoading(true);
-    
-    const feedbackRef = collection(db, 'feedback');
-    
-    // Try with orderBy first, fallback if index doesn't exist
     const setupFeedbackListener = () => {
       try {
         const feedbackQuery = query(
-          feedbackRef,
+          collection(db, 'feedback'),
           where('userId', '==', user.uid),
           orderBy('createdAt', 'desc')
         );
 
-        const unsubscribe = onSnapshot(
-          feedbackQuery,
-          (snapshot) => {
-            const feedbackData = snapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            }));
-            setMyFeedback(feedbackData);
-            setLoading(false);
-            console.log(`💬 Loaded ${feedbackData.length} feedback items`);
-          },
-          (error) => {
-            console.error('❌ Feedback listener error:', error);
-            if (error.code === 'failed-precondition') {
-              console.log('📝 Index required, using fallback query');
-              setupFallbackListener();
-            } else {
-              setLoading(false);
-            }
-          }
-        );
+        const unsubscribe = onSnapshot(feedbackQuery, (snapshot) => {
+          const feedbackData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+
+          // Sort by creation date (newest first)
+          feedbackData.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt) || new Date(0);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt) || new Date(0);
+            return dateB - dateA;
+          });
+
+          setMyFeedback(feedbackData);
+          setLoading(false);
+          setRefreshing(false);
+          console.log(`💬 Loaded ${feedbackData.length} feedback items`);
+        });
 
         return unsubscribe;
       } catch (error) {
         console.error('❌ Error setting up feedback listener:', error);
-        setupFallbackListener();
+        setLoading(false);
+        setRefreshing(false);
         return () => {};
       }
     };
 
-    // Fallback listener without orderBy
-    const setupFallbackListener = () => {
-      const fallbackQuery = query(feedbackRef, where('userId', '==', user.uid));
-      
-      const unsubscribe = onSnapshot(fallbackQuery, (snapshot) => {
-        const feedbackData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-
-        // Manual sorting since we can't use orderBy
-        feedbackData.sort((a, b) => {
-          const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt) || new Date(0);
-          const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt) || new Date(0);
-          return dateB - dateA;
-        });
-
-        setMyFeedback(feedbackData);
-        setLoading(false);
-        console.log(`💬 Loaded ${feedbackData.length} feedback items (fallback)`);
-      });
-
-      return unsubscribe;
-    };
-
     const unsubscribe = setupFeedbackListener();
-
     return () => {
       if (unsubscribe) unsubscribe();
     };
@@ -156,7 +120,7 @@ export default function MyFeedbackScreen({ navigation }) {
   };
 
   const getCategoryIcon = (category) => {
-    switch (category) {
+    switch (category?.toLowerCase()) {
       case 'maintenance': return 'build';
       case 'cleanliness': return 'cleaning-services';
       case 'facilities': return 'location-city';
@@ -171,7 +135,8 @@ export default function MyFeedbackScreen({ navigation }) {
     if (!feedback.createdAt) return 'Recently';
     
     try {
-      const date = feedback.createdAt.toDate ? feedback.createdAt.toDate() : new Date(feedback.createdAt);
+      const date = feedback.createdAt.toDate ? 
+        feedback.createdAt.toDate() : new Date(feedback.createdAt);
       return date.toLocaleDateString('en-MY', {
         day: 'numeric',
         month: 'short',
@@ -185,7 +150,7 @@ export default function MyFeedbackScreen({ navigation }) {
   };
 
   const getSeverityColor = (severity) => {
-    switch (severity) {
+    switch (severity?.toLowerCase()) {
       case 'high': return '#F44336';
       case 'medium': return '#FF9800';
       case 'low': return '#4CAF50';
@@ -245,7 +210,8 @@ export default function MyFeedbackScreen({ navigation }) {
               </Text>
             </View>
             <Chip 
-              textStyle={{ fontSize: 10 }}
+              mode="flat"
+              textStyle={styles.statusChipText}
               style={[
                 styles.statusChip, 
                 { backgroundColor: getStatusColor(feedback.status) }
@@ -261,15 +227,16 @@ export default function MyFeedbackScreen({ navigation }) {
               {feedback.courtName || 'General'} • {feedback.category}
             </Text>
             <View style={styles.metaRight}>
-              <Chip 
-                textStyle={{ fontSize: 10 }}
-                style={[
-                  styles.severityChip,
-                  { backgroundColor: getSeverityColor(feedback.severity) }
-                ]}
-              >
-                {feedback.severity?.toUpperCase()}
-              </Chip>
+             <Chip 
+  mode="flat"
+  textStyle={styles.severityChipText}
+  style={[
+    styles.severityChip,
+    { backgroundColor: getSeverityColor(feedback.severity) }
+  ]}
+>
+  {feedback.severity?.toUpperCase()}
+</Chip>
             </View>
           </View>
 
@@ -363,34 +330,36 @@ export default function MyFeedbackScreen({ navigation }) {
       </Surface>
 
       {/* Filter Chips */}
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        style={styles.filtersContainer}
-        contentContainerStyle={styles.filtersContent}
-      >
-        {filterOptions.map((option) => (
-          <View key={option.value} style={styles.filterChipContainer}>
-            <Chip
-              selected={filter === option.value}
-              onPress={() => setFilter(option.value)}
-              style={styles.filterChip}
-              mode={filter === option.value ? "flat" : "outlined"}
-            >
-              {option.label}
-            </Chip>
-            {filterCounts[option.value] > 0 && (
-              <Badge style={styles.filterBadge}>
-                {filterCounts[option.value]}
-              </Badge>
-            )}
-          </View>
-        ))}
-      </ScrollView>
+      <View style={styles.filtersContainer}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersContent}
+        >
+          {filterOptions.map((option) => (
+            <View key={option.value} style={styles.filterChipContainer}>
+              <Chip
+                selected={filter === option.value}
+                onPress={() => setFilter(option.value)}
+                style={styles.filterChip}
+                mode={filter === option.value ? "flat" : "outlined"}
+              >
+                {option.label}
+              </Chip>
+              {filterCounts[option.value] > 0 && (
+                <Badge style={styles.filterBadge}>
+                  {filterCounts[option.value]}
+                </Badge>
+              )}
+            </View>
+          ))}
+        </ScrollView>
+      </View>
 
       {/* Feedback List */}
       <ScrollView
         style={styles.feedbackList}
+        contentContainerStyle={styles.feedbackListContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -471,12 +440,15 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 4,
   },
+  // FIXED: Better filter container layout
   filtersContainer: {
     paddingHorizontal: 16,
-    marginBottom: 8,
+    marginBottom: 12, // Reduced from default
+    height: 50, // Fixed height to prevent expansion
   },
   filtersContent: {
     paddingRight: 16,
+    alignItems: 'center',
   },
   filterChipContainer: {
     position: 'relative',
@@ -484,6 +456,7 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     marginVertical: 4,
+    height: 36, // Fixed height
   },
   filterBadge: {
     position: 'absolute',
@@ -491,9 +464,14 @@ const styles = StyleSheet.create({
     right: -8,
     fontSize: 10,
   },
+  // FIXED: Better feedback list layout
   feedbackList: {
     flex: 1,
     paddingHorizontal: 16,
+  },
+  feedbackListContent: {
+    paddingBottom: 100, // Space for FAB
+    flexGrow: 1, // Allow content to grow
   },
   feedbackCard: {
     marginBottom: 12,
@@ -515,8 +493,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     flex: 1,
   },
+  // FIXED: Better status chip styling
   statusChip: {
-    height: 24,
+    height: 32,
+    minWidth: 100,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  statusChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'white',
+    textAlign: 'center',
   },
   feedbackMeta: {
     flexDirection: 'row',
@@ -533,7 +521,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   severityChip: {
-    height: 20,
+    height: 32,
+    minWidth: 70,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  severityChipText: {
+    fontSize: 8,
+    fontWeight: '600',
+    color: 'white',
+    textAlign: 'center',
   },
   descriptionPreview: {
     marginBottom: 12,
@@ -557,8 +554,10 @@ const styles = StyleSheet.create({
   responseText: {
     marginLeft: 4,
   },
+  // FIXED: Better empty state layout
   emptyCard: {
-    marginTop: 32,
+    marginTop: 16, // Reduced from 32
+    marginBottom: 16,
   },
   emptyContent: {
     alignItems: 'center',
